@@ -1,4 +1,5 @@
-const fallbackRepo = "FarIsland-Corporation/MedusaDesk";
+const fallbackRepo = "ruigro/MedusaDesk";
+const releaseTag = "v0.1.0-test";
 
 function inferRepo() {
   if (window.MEDUSA_RELEASE_REPO) {
@@ -15,6 +16,38 @@ function inferRepo() {
   }
 
   return fallbackRepo;
+}
+
+function detectPlatform() {
+  const ua = navigator.userAgent.toLowerCase();
+  const platform = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
+  const arch = navigator.userAgentData?.architecture?.toLowerCase() || ua;
+
+  if (ua.includes("windows") || platform.includes("win")) {
+    return { key: "windows", label: "Windows" };
+  }
+  if (ua.includes("mac os") || platform.includes("mac")) {
+    const isArm = arch.includes("arm") || arch.includes("aarch64");
+    return { key: "macos", label: isArm ? "macOS Apple Silicon" : "macOS" };
+  }
+  if (ua.includes("linux") || platform.includes("linux")) {
+    return { key: "linux", label: "Linux" };
+  }
+  return { key: "unknown", label: "your OS" };
+}
+
+function assetPlatform(asset) {
+  const name = asset.name.toLowerCase();
+  if (name.includes("windows") || name.includes("win") || name.endsWith(".exe") || name.endsWith(".msi")) {
+    return "windows";
+  }
+  if (name.includes("macos") || name.includes("darwin") || name.endsWith(".dmg")) {
+    return "macos";
+  }
+  if (name.includes("linux") || name.endsWith(".appimage") || name.endsWith(".deb") || name.endsWith(".rpm")) {
+    return "linux";
+  }
+  return "unknown";
 }
 
 function formatBytes(bytes) {
@@ -38,12 +71,19 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
-function pickPrimaryAsset(assets) {
-  const preferred = [".exe", ".msi", ".zip"];
+function pickPrimaryAsset(assets, platform) {
+  const platformAssets = assets.filter((asset) => assetPlatform(asset) === platform.key);
+  const preferred = platform.key === "macos"
+    ? ["aarch64", "arm64", ".dmg", "x86_64"]
+    : platform.key === "windows"
+      ? [".msi", ".exe", ".zip"]
+      : [".appimage", ".deb", ".rpm", ".zip"];
+  const candidates = platformAssets.length ? platformAssets : assets;
+
   return (
     preferred
-      .map((ext) => assets.find((asset) => asset.name.toLowerCase().endsWith(ext)))
-      .find(Boolean) || assets[0]
+      .map((token) => candidates.find((asset) => asset.name.toLowerCase().includes(token)))
+      .find(Boolean) || candidates[0]
   );
 }
 
@@ -80,10 +120,11 @@ function renderRelease(repo, release) {
   const primaryDownload = document.getElementById("primary-download");
   const allReleases = document.getElementById("all-releases-link");
   const downloadList = document.getElementById("download-list");
+  const platform = detectPlatform();
 
-  const tag = release.tag_name || release.name || "Latest";
+  const tag = release.tag_name || release.name || releaseTag;
   releaseTitle.textContent = release.name || tag;
-  releaseDate.textContent = `Published ${formatDate(release.published_at)} from ${repo}`;
+  releaseDate.textContent = `Detected ${platform.label}. Published ${formatDate(release.published_at)} from ${repo}`;
   allReleases.href = `https://github.com/${repo}/releases`;
 
   const assets = release.assets || [];
@@ -96,20 +137,26 @@ function renderRelease(repo, release) {
     return;
   }
 
-  const primary = pickPrimaryAsset(assets);
-  primaryDownload.href = primary.browser_download_url;
-  primaryDownload.textContent = `Download ${primary.name}`;
+  const primary = pickPrimaryAsset(assets, platform);
+  if (primary && assetPlatform(primary) === platform.key) {
+    primaryDownload.href = primary.browser_download_url;
+    primaryDownload.textContent = `Download for ${platform.label}`;
+  } else {
+    primaryDownload.href = `https://github.com/${repo}/releases/tag/${tag}`;
+    primaryDownload.textContent = `${platform.label} build coming soon`;
+  }
   primaryDownload.classList.remove("disabled");
   primaryDownload.removeAttribute("aria-disabled");
 
   downloadList.innerHTML = assets
     .map((asset) => {
       const name = escapeHtml(asset.name);
+      const isDetected = assetPlatform(asset) === platform.key;
       return `
-        <div class="download-row">
+        <div class="download-row${isDetected ? " recommended" : ""}">
           <div>
             <p class="asset-name">${name}</p>
-            <p class="asset-meta">${formatBytes(asset.size)} · ${asset.download_count || 0} downloads</p>
+            <p class="asset-meta">${formatBytes(asset.size)} - ${asset.download_count || 0} downloads${isDetected ? " - recommended for this device" : ""}</p>
           </div>
           <a class="download-action" href="${asset.browser_download_url}">Download</a>
         </div>
@@ -121,19 +168,23 @@ function renderRelease(repo, release) {
 }
 
 function renderError(repo) {
-  document.getElementById("release-title").textContent = "No release found";
+  const releaseUrl = `https://github.com/${repo}/releases/tag/${releaseTag}`;
+  document.getElementById("release-title").textContent = "Download Medusa Desk";
   document.getElementById("release-date").textContent =
-    `Create a GitHub release with assets in ${repo}, then this page will update automatically.`;
-  document.getElementById("all-releases-link").href =
-    `https://github.com/${repo}/releases`;
+    `Release data could not be loaded. Open the GitHub release directly.`;
+  document.getElementById("primary-download").href = releaseUrl;
+  document.getElementById("primary-download").textContent = "Open downloads";
+  document.getElementById("primary-download").classList.remove("disabled");
+  document.getElementById("primary-download").removeAttribute("aria-disabled");
+  document.getElementById("all-releases-link").href = `https://github.com/${repo}/releases`;
   document.getElementById("download-list").innerHTML =
-    '<p class="muted">No downloadable release assets are available yet.</p>';
+    `<p class="muted"><a href="${releaseUrl}">Open the release page</a> to download Medusa Desk.</p>`;
 }
 
 async function loadRelease() {
   const repo = inferRepo();
   try {
-    const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
+    const response = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${releaseTag}`, {
       headers: { Accept: "application/vnd.github+json" },
     });
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`);

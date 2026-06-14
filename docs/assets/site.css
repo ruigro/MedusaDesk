@@ -123,6 +123,15 @@ h2 {
   white-space: nowrap;
 }
 
+.primary-action-large {
+  min-height: 76px;
+  min-width: min(100%, 360px);
+  padding: 0 34px;
+  border-radius: 8px;
+  box-shadow: 0 18px 50px rgba(246, 179, 26, 0.22);
+  font-size: 22px;
+}
+
 .primary-action:hover,
 .download-action:hover {
   background: var(--gold-strong);
@@ -167,6 +176,11 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-soft);
+}
+
+.download-row.recommended {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px rgba(246, 179, 26, 0.25);
 }
 
 .asset-name {

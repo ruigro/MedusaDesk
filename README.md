@@ -8,6 +8,16 @@
   <b>Medusa Desk is a Far Island Corporation branded fork of RustDesk.</b>
 </p>
 
+<h1 align="center">
+  <a href="https://ruigro.github.io/MedusaDesk/">DOWNLOAD MEDUSA DESK</a>
+</h1>
+
+<p align="center">
+  The download page detects Windows, macOS, or Linux and recommends the right build.
+  Direct release downloads are also available at
+  <a href="https://github.com/ruigro/MedusaDesk/releases/tag/v0.1.0-test">v0.1.0-test</a>.
+</p>
+
 > [!Caution]
 > **Misuse Disclaimer:** <br>
 > The developers of Medusa Desk do not condone or support any unethical or illegal use of this software. Misuse, such as unauthorized access, control or invasion of privacy, is strictly against our guidelines. The authors are not responsible for any misuse of the application.
