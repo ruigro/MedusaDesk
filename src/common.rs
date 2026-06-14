@@ -1065,12 +1065,31 @@ fn is_usable_medusa_update_asset(name: &str) -> bool {
 }
 
 fn pick_medusa_update_asset(release: &GithubRelease) -> Option<String> {
-    release
-        .assets
-        .iter()
-        .map(|asset| asset.name.as_str())
-        .find(|name| is_usable_medusa_update_asset(name))
-        .map(ToOwned::to_owned)
+    #[cfg(target_os = "windows")]
+    {
+        let preferred_ext = if crate::platform::is_msi_installed().unwrap_or(false) {
+            ".msi"
+        } else {
+            ".exe"
+        };
+        return release
+            .assets
+            .iter()
+            .map(|asset| asset.name.as_str())
+            .find(|name| {
+                is_usable_medusa_update_asset(name) && name.to_lowercase().ends_with(preferred_ext)
+            })
+            .map(ToOwned::to_owned);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        release
+            .assets
+            .iter()
+            .map(|asset| asset.name.as_str())
+            .find(|name| is_usable_medusa_update_asset(name))
+            .map(ToOwned::to_owned)
+    }
 }
 
 async fn do_check_medusadesk_software_update() -> hbb_common::ResultType<()> {
