@@ -6,6 +6,7 @@ use std::{
     task::Poll,
 };
 
+use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 #[cfg(not(target_os = "ios"))]
@@ -39,7 +40,7 @@ use hbb_common::{
 
 use crate::{
     hbbs_http::{create_http_client_async, get_url_for_tls},
-    ui_interface::{get_api_server as ui_get_api_server, get_option, is_installed, set_option},
+    ui_interface::{get_api_server as ui_get_api_server, get_option, set_option},
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -94,10 +95,18 @@ pub mod input {
 
 lazy_static::lazy_static! {
     pub static ref SOFTWARE_UPDATE_URL: Arc<Mutex<String>> = Default::default();
+    pub static ref SOFTWARE_UPDATE_DOWNLOAD_FILE: Arc<Mutex<String>> = Default::default();
     pub static ref DEVICE_ID: Arc<Mutex<String>> = Default::default();
     pub static ref DEVICE_NAME: Arc<Mutex<String>> = Default::default();
     static ref PUBLIC_IPV6_ADDR: Arc<Mutex<(Option<SocketAddr>, Option<Instant>)>> = Default::default();
 }
+
+const MEDUSADESK_RELEASES_API: &str = "https://api.github.com/repos/ruigro/MedusaDesk/releases";
+pub const MEDUSADESK_DOWNLOAD_PAGE: &str = "https://ruigro.github.io/MedusaDesk/";
+pub const MEDUSADESK_RELEASE_TAG: &str = match option_env!("MEDUSA_RELEASE_TAG") {
+    Some(tag) => tag,
+    None => "v0.1.0-test",
+};
 
 lazy_static::lazy_static! {
     // Is server process, with "--server" args
@@ -940,7 +949,7 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 }
 
 pub fn check_software_update() {
-    if is_custom_client() {
+    if is_custom_client() && !is_medusadesk() {
         return;
     }
     let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
@@ -953,6 +962,10 @@ pub fn check_software_update() {
 // Because the url is always `https://api.rustdesk.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
+    if is_medusadesk() {
+        return do_check_medusadesk_software_update().await;
+    }
+
     let (request, url) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
     let proxy_conf = Config::get_socks();
@@ -994,8 +1007,108 @@ pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
             }
         }
         *SOFTWARE_UPDATE_URL.lock().unwrap() = response_url;
+        *SOFTWARE_UPDATE_DOWNLOAD_FILE.lock().unwrap() = "".to_string();
     } else {
         *SOFTWARE_UPDATE_URL.lock().unwrap() = "".to_string();
+        *SOFTWARE_UPDATE_DOWNLOAD_FILE.lock().unwrap() = "".to_string();
+    }
+    Ok(())
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct GithubReleaseAsset {
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct GithubRelease {
+    #[serde(default)]
+    tag_name: String,
+    #[serde(default)]
+    html_url: String,
+    #[serde(default)]
+    draft: bool,
+    #[serde(default)]
+    assets: Vec<GithubReleaseAsset>,
+}
+
+fn medusa_release_version_number(tag: &str) -> i64 {
+    let clean = tag
+        .trim_start_matches('v')
+        .split(['-', '+'])
+        .next()
+        .unwrap_or(tag);
+    get_version_number(clean)
+}
+
+fn is_usable_medusa_update_asset(name: &str) -> bool {
+    let lower = name.to_lowercase();
+    #[cfg(target_os = "windows")]
+    {
+        (lower.contains("x64") || lower.contains("x86_64"))
+            && (lower.ends_with(".msi") || lower.ends_with(".exe"))
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let is_arch = if cfg!(target_arch = "aarch64") {
+            lower.contains("aarch64") || lower.contains("arm64")
+        } else {
+            lower.contains("x86_64") || lower.contains("intel")
+        };
+        lower.contains("macos") && lower.ends_with(".dmg") && is_arch
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        false
+    }
+}
+
+fn pick_medusa_update_asset(release: &GithubRelease) -> Option<String> {
+    release
+        .assets
+        .iter()
+        .map(|asset| asset.name.as_str())
+        .find(|name| is_usable_medusa_update_asset(name))
+        .map(ToOwned::to_owned)
+}
+
+async fn do_check_medusadesk_software_update() -> hbb_common::ResultType<()> {
+    let proxy_conf = Config::get_socks();
+    let tls_url = get_url_for_tls(MEDUSADESK_RELEASES_API, &proxy_conf);
+    let tls_type = get_cached_tls_type(tls_url).unwrap_or(TlsType::Rustls);
+    let client = create_http_client_async(tls_type, false);
+    let releases_response = client
+        .get(MEDUSADESK_RELEASES_API)
+        .header(reqwest::header::USER_AGENT, "MedusaDesk")
+        .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+        .send()
+        .await?;
+    let releases: Vec<GithubRelease> = releases_response.json().await?;
+    let current_version = medusa_release_version_number(MEDUSADESK_RELEASE_TAG);
+    let latest = releases.into_iter().find(|release| {
+        !release.draft
+            && medusa_release_version_number(&release.tag_name) > current_version
+            && pick_medusa_update_asset(release).is_some()
+    });
+
+    if let Some(release) = latest {
+        if let Some(asset) = pick_medusa_update_asset(&release) {
+            #[cfg(feature = "flutter")]
+            {
+                let mut m = HashMap::new();
+                m.insert("name", "check_software_update_finish");
+                m.insert("url", &release.html_url);
+                if let Ok(data) = serde_json::to_string(&m) {
+                    let _ = crate::flutter::push_global_event(crate::flutter::APP_TYPE_MAIN, data);
+                }
+            }
+            *SOFTWARE_UPDATE_URL.lock().unwrap() = release.html_url;
+            *SOFTWARE_UPDATE_DOWNLOAD_FILE.lock().unwrap() = asset;
+        }
+    } else {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = "".to_string();
+        *SOFTWARE_UPDATE_DOWNLOAD_FILE.lock().unwrap() = "".to_string();
     }
     Ok(())
 }
@@ -1016,6 +1129,14 @@ pub fn get_display_name() -> String {
 #[inline]
 pub fn is_rustdesk() -> bool {
     hbb_common::config::APP_NAME.read().unwrap().eq("RustDesk")
+}
+
+#[inline]
+pub fn is_medusadesk() -> bool {
+    hbb_common::config::APP_NAME
+        .read()
+        .unwrap()
+        .eq("MedusaDesk")
 }
 
 #[inline]

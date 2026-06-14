@@ -2845,6 +2845,17 @@ pub fn main_get_common(key: String) -> String {
             }
         } else if key.starts_with("download-file-") {
             let _version = key.replace("download-file-", "");
+            if crate::common::is_medusadesk() {
+                let download_file = crate::common::SOFTWARE_UPDATE_DOWNLOAD_FILE
+                    .lock()
+                    .unwrap()
+                    .clone();
+                return if download_file.is_empty() {
+                    "error:No MedusaDesk update file is available for this platform.".to_owned()
+                } else {
+                    download_file
+                };
+            }
             #[cfg(target_os = "windows")]
             return match (
                 crate::platform::windows::is_msi_installed(),

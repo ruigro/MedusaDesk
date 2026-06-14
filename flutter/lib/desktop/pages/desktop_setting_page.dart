@@ -548,7 +548,9 @@ class _GeneralState extends State<_General> {
               isServer: false,
             ),
           ),
-        if (!isWeb && !bind.isCustomClient())
+        if (!isWeb &&
+            (!bind.isCustomClient() ||
+                bind.mainUriPrefixSync().contains('medusadesk')))
           _OptionCheckBox(
             context,
             'Check for software update on startup',
@@ -2507,8 +2509,7 @@ class _AiAgentsState extends State<_AiAgents>
         color: isDark ? MedusaColors.abyss : MedusaColors.lightBg,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-            color:
-                isDark ? MedusaColors.hairline : MedusaColors.lightHairline),
+            color: isDark ? MedusaColors.hairline : MedusaColors.lightHairline),
       ),
       child: Row(
         children: [
@@ -2602,7 +2603,8 @@ class _AiAgentsState extends State<_AiAgents>
       _hint(context,
           'Register Medusa Desk as an MCP server so AI coding agents get remote-control tools (medusa_screenshot, medusa_exec, medusa_click, ...) natively:'),
       _snippet(context, 'claude mcp add medusadesk -- medusadesk agent mcp'),
-      _hint(context, 'Custom agent frameworks can use the HTTP JSON API instead:'),
+      _hint(context,
+          'Custom agent frameworks can use the HTTP JSON API instead:'),
       Obx(() => _snippet(context, 'http://127.0.0.1:${_port.value}')),
     ]);
   }

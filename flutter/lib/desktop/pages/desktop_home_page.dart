@@ -334,8 +334,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
     return Container(
       margin: EdgeInsets.only(left: 16.0, right: 16, top: 13, bottom: 13),
       padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
-      decoration:
-          _medusaPanel(context, glowColor: MedusaColors.violetGlow),
+      decoration: _medusaPanel(context, glowColor: MedusaColors.violetGlow),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -457,14 +456,16 @@ class _DesktopHomePageState extends State<DesktopHomePage>
   }
 
   Widget buildHelpCards(String updateUrl) {
-    if (!bind.isCustomClient() &&
+    final isMedusaDesk = bind.mainUriPrefixSync().contains('medusadesk');
+    if ((!bind.isCustomClient() || isMedusaDesk) &&
         updateUrl.isNotEmpty &&
-        !isCardClosed &&
-        bind.mainUriPrefixSync().contains('rustdesk')) {
+        !isCardClosed) {
       final isToUpdate = (isWindows || isMacOS) && bind.mainIsInstalled();
       String btnText = isToUpdate ? 'Update' : 'Download';
       GestureTapCallback onPressed = () async {
-        final Uri url = Uri.parse('https://rustdesk.com/download');
+        final Uri url = Uri.parse(isMedusaDesk
+            ? 'https://ruigro.github.io/MedusaDesk/'
+            : 'https://rustdesk.com/download');
         await launchUrl(url);
       };
       if (isToUpdate) {
@@ -479,9 +480,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
           onPressed,
           closeButton: true,
           help: isToUpdate ? 'Changelog' : null,
-          link: isToUpdate
-              ? 'https://github.com/rustdesk/rustdesk/releases/tag/${bind.mainGetNewVersion()}'
-              : null);
+          link: isToUpdate ? updateUrl : null);
     }
     if (systemError.isNotEmpty) {
       return buildInstallCard("", systemError, "", () {});
