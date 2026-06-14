@@ -112,7 +112,7 @@ class ImagePainter extends CustomPainter {
     // https://api.flutter-io.cn/flutter/dart-ui/FilterQuality.html
     var paint = Paint();
     if ((scale - 1.0).abs() > 0.001) {
-      paint.filterQuality = FilterQuality.medium;
+      paint.filterQuality = FilterQuality.high;
       if (scale > 10.00000) {
         paint.filterQuality = FilterQuality.high;
       }

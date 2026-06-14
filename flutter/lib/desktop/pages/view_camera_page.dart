@@ -600,7 +600,7 @@ class _ImagePaintState extends State<ImagePaint> {
           child: Obx(() => Texture(
                 textureId: textureId.value,
                 filterQuality:
-                    isViewOriginal ? FilterQuality.none : FilterQuality.low,
+                    isViewOriginal ? FilterQuality.none : FilterQuality.high,
               )),
         ));
       }
