@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Medusa Desk
+NoDisplay=true
+MimeType=x-scheme-handler/medusadesk;
+TryExec=rustdesk
+Exec=rustdesk %u
+Icon=rustdesk
+Terminal=false
+Type=Application
+StartupNotify=false
+StartupWMClass=rustdesk

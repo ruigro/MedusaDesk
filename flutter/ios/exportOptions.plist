@@ -1,0 +1,15 @@
+﻿<?xml version=â€1.0" encoding=â€UTF-8"?>
+ <!DOCTYPE plist PUBLIC â€œ-//Apple//DTD PLIST 1.0//ENâ€ â€œhttp://www.apple.com/DTDs/PropertyList-1.0.dtd">
+ <plist version=â€1.0">
+ <dict>
+ <key>method</key>
+ <string>app-store</string>
+ <key>teamID</key>
+ <string>HZF9JMC8YN</string>
+ <key>provisioningProfiles</key>
+ <dict>
+ <key>com.farisland.medusadesk</key>
+ <string>medusadesk-ios-prod-app-store</string>
+ </dict>
+ </dict>
+ </plist>

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Medusa Desk</title>
+    <meta
+      name="description"
+      content="Medusa Desk remote desktop builds and release downloads from Far Island Corporation."
+    >
+    <link rel="stylesheet" href="assets/site.css">
+    <script>
+      window.MEDUSA_RELEASE_REPO = "";
+    </script>
+    <script defer src="assets/releases.js"></script>
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="brand-lockup">
+          <img
+            class="medusa-mark"
+            src="assets/medusa-desk.png"
+            alt="Medusa Desk logo"
+          >
+          <div>
+            <p class="eyebrow">Far Island Corporation</p>
+            <h1 id="page-title">Medusa Desk</h1>
+          </div>
+        </div>
+
+        <p class="lede">
+          A Far Island remote desktop build based on RustDesk, packaged for
+          direct support sessions and private infrastructure.
+        </p>
+
+        <div class="release-panel" aria-live="polite">
+          <div>
+            <p class="panel-label">Latest Release</p>
+            <h2 id="release-title">Checking releases...</h2>
+            <p id="release-date" class="muted">Loading GitHub release data.</p>
+          </div>
+          <a id="primary-download" class="primary-action disabled" href="#" aria-disabled="true">
+            Download
+          </a>
+        </div>
+      </section>
+
+      <section class="downloads" aria-labelledby="downloads-title">
+        <div class="section-heading">
+          <h2 id="downloads-title">Downloads</h2>
+          <a id="all-releases-link" href="#" class="text-link">All releases</a>
+        </div>
+        <div id="download-list" class="download-list">
+          <p class="muted">Release assets will appear here automatically.</p>
+        </div>
+      </section>
+
+      <section class="notes" aria-labelledby="notes-title">
+        <h2 id="notes-title">Release Notes</h2>
+        <article id="release-notes" class="release-notes">
+          <p class="muted">No release notes loaded yet.</p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>
