@@ -107,6 +107,10 @@ pub const MEDUSADESK_RELEASE_TAG: &str = match option_env!("MEDUSA_RELEASE_TAG")
     Some(tag) => tag,
     None => "v0.1.0-test",
 };
+pub const MEDUSADESK_BUILD_ID: &str = match option_env!("MEDUSA_BUILD_ID") {
+    Some(id) => id,
+    None => "local",
+};
 
 lazy_static::lazy_static! {
     // Is server process, with "--server" args

@@ -31,6 +31,7 @@ env:
   FLUTTER_ELINUX_VERSION: "3.16.9"
   TAG_NAME: "${{ inputs.upload-tag }}"
   MEDUSA_RELEASE_TAG: "${{ inputs.upload-tag }}"
+  MEDUSA_BUILD_ID: "${{ github.sha }}"
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
   # vcpkg version: 2025.08.27
   # If we change the `VCPKG COMMIT_ID`, please remember:

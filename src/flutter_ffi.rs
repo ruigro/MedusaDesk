@@ -1101,7 +1101,19 @@ pub fn main_get_license() -> String {
 }
 
 pub fn main_get_version() -> String {
-    get_version()
+    let version = get_version();
+    if crate::common::is_medusadesk() {
+        let build_id = crate::common::MEDUSADESK_BUILD_ID;
+        let short_build_id = build_id.get(..7).unwrap_or(build_id);
+        format!(
+            "{} / Medusa {} / {}",
+            version,
+            crate::common::MEDUSADESK_RELEASE_TAG,
+            short_build_id
+        )
+    } else {
+        version
+    }
 }
 
 pub fn main_get_fav() -> Vec<String> {
