@@ -1,5 +1,5 @@
 const fallbackRepo = "ruigro/MedusaDesk";
-const releaseTag = "v0.1.0-test";
+const releaseTag = "v0.1.1";
 
 function inferRepo() {
   if (window.MEDUSA_RELEASE_REPO) {
