@@ -4022,7 +4022,10 @@ void earlyAssert() {
 
 void checkUpdate() {
   if (!isWeb) {
-    if (!bind.isCustomClient()) {
+    final isMedusaDesk =
+        bind.mainUriPrefixSync().toLowerCase().contains('medusadesk') ||
+            bind.mainGetAppNameSync().toLowerCase().contains('medusa');
+    if (!bind.isCustomClient() || isMedusaDesk) {
       platformFFI.registerEventHandler(
           kCheckSoftwareUpdateFinish, kCheckSoftwareUpdateFinish,
           (Map<String, dynamic> evt) async {
