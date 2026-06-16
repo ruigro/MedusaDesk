@@ -359,6 +359,7 @@ const kInvalidValueStr = 'InvalidValueStr';
 
 // Config key shared by flutter and other ui.
 const kCommConfKeyTheme = 'theme';
+const kCommConfKeySkin = 'skin';
 const kCommConfKeyLang = 'lang';
 
 const kMobilePageConstraints = BoxConstraints(maxWidth: 600);

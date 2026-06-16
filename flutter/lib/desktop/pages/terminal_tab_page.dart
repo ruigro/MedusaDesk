@@ -290,7 +290,7 @@ class _TerminalTabPageState extends State<TerminalTabPage> {
       items: menu
           .map((e) => e.build(
                 context,
-                const MenuConfig(
+                MenuConfig(
                   commonColor: CustomPopupMenuTheme.commonColor,
                   height: CustomPopupMenuTheme.height,
                   dividerHeight: CustomPopupMenuTheme.dividerHeight,

@@ -136,6 +136,7 @@ Future<void> initEnv(String appType) async {
 void runMainApp(bool startService) async {
   // register uni links
   await initEnv(kAppTypeMain);
+  MyTheme.loadSkinPreference();
   checkUpdate();
   // trigger connection status updater
   await bind.mainCheckConnectStatus();
@@ -180,6 +181,7 @@ void runMainApp(bool startService) async {
 
 void runMobileApp() async {
   await initEnv(kAppTypeMain);
+  MyTheme.loadSkinPreference();
   checkUpdate();
   if (isAndroid) androidChannelInit();
   if (isAndroid) platformFFI.syncAndroidServiceAppDirConfigPath();
@@ -195,6 +197,7 @@ void runMultiWindow(
   String appType,
 ) async {
   await initEnv(appType);
+  MyTheme.loadSkinPreference();
   final title = getWindowName();
   // set prevent close to true, we handle close event manually
   WindowController.fromWindowId(kWindowId!).setPreventClose(true);
@@ -289,6 +292,7 @@ void runMultiWindow(
 
 void runConnectionManagerScreen() async {
   await initEnv(kAppTypeConnectionManager);
+  MyTheme.loadSkinPreference();
   _runApp(
     '',
     const DesktopServerPage(),
@@ -392,6 +396,7 @@ void _runApp(
 void runInstallPage() async {
   await windowManager.ensureInitialized();
   await initEnv(kAppTypeMain);
+  MyTheme.loadSkinPreference();
   _runApp('', const InstallPage(), MyTheme.currentThemeMode());
   WindowOptions windowOptions =
       getHiddenTitleBarWindowOptions(size: Size(800, 600), center: true);

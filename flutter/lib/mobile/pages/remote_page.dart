@@ -1259,7 +1259,7 @@ void showOptions(
         )));
   }
   if (displays.isNotEmpty) {
-    displays.add(const Divider(color: MyTheme.border));
+    displays.add(Divider(color: MyTheme.border));
   }
 
   List<TRadioMenu<String>> viewStyleRadios =
@@ -1305,7 +1305,7 @@ void showOptions(
       Obx(() => viewStyle.value == kRemoteViewStyleCustom
           ? MobileCustomScaleControls(ffi: gFFI)
           : const SizedBox.shrink()),
-      const Divider(color: MyTheme.border),
+      Divider(color: MyTheme.border),
       for (var e in imageQualityRadios)
         Obx(() => getRadio<String>(
             e.child,
@@ -1317,7 +1317,7 @@ void showOptions(
                     if (v != null) imageQuality.value = v;
                   }
                 : null)),
-      const Divider(color: MyTheme.border),
+      Divider(color: MyTheme.border),
       for (var e in codecRadios)
         Obx(() => getRadio<String>(
             e.child,
@@ -1329,7 +1329,7 @@ void showOptions(
                     if (v != null) codec.value = v;
                   }
                 : null)),
-      if (codecRadios.isNotEmpty) const Divider(color: MyTheme.border),
+      if (codecRadios.isNotEmpty) Divider(color: MyTheme.border),
     ];
     final rxCursorToggleValues = cursorToggles.map((e) => e.value.obs).toList();
     final cursorTogglesList = cursorToggles
@@ -1366,7 +1366,7 @@ void showOptions(
         .toList();
     final toggles = [
       ...cursorTogglesList,
-      if (cursorToggles.isNotEmpty) const Divider(color: MyTheme.border),
+      if (cursorToggles.isNotEmpty) Divider(color: MyTheme.border),
       ...displayTogglesList,
     ];
 
@@ -1407,7 +1407,7 @@ void showOptions(
       ));
     }
     if (popupDialogMenus.isNotEmpty) {
-      popupDialogMenus.add(const Divider(color: MyTheme.border));
+      popupDialogMenus.add(Divider(color: MyTheme.border));
     }
 
     return CustomAlertDialog(

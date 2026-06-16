@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
@@ -171,33 +171,33 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
   final Color? toastText;
   final Color? divider;
 
-  static final light = ColorThemeExtension(
-    border: MedusaColors.lightHairline,
-    border2: Color(0xFFBBCDD4),
-    border3: Colors.black26,
-    highlight: MedusaColors.lightHover,
-    drag_indicator: Colors.grey[800],
-    shadow: Colors.black,
-    errorBannerBg: Color(0xFFFDEEEB),
-    me: MedusaColors.biolumeDim,
-    toastBg: Colors.black.withOpacity(0.6),
-    toastText: Colors.white,
-    divider: Colors.black38,
-  );
+  static ColorThemeExtension get light => ColorThemeExtension(
+        border: MedusaColors.lightHairline,
+        border2: MedusaColors.lightBorder2,
+        border3: Colors.black26,
+        highlight: MedusaColors.lightHover,
+        drag_indicator: Colors.grey[800],
+        shadow: Colors.black,
+        errorBannerBg: const Color(0xFFFDEEEB),
+        me: MedusaColors.biolumeDim,
+        toastBg: Colors.black.withOpacity(0.6),
+        toastText: Colors.white,
+        divider: Colors.black38,
+      );
 
-  static final dark = ColorThemeExtension(
-    border: MedusaColors.hairline,
-    border2: Color(0xFF2C4763),
-    border3: Colors.white24,
-    highlight: MedusaColors.surfaceHi,
-    drag_indicator: MedusaColors.textMuted,
-    shadow: MedusaColors.biolumeGlow,
-    errorBannerBg: Color(0xFF3A1430),
-    me: MedusaColors.biolume,
-    toastBg: MedusaColors.deepSea.withOpacity(0.92),
-    toastText: MedusaColors.textPrimary,
-    divider: Colors.white24,
-  );
+  static ColorThemeExtension get dark => ColorThemeExtension(
+        border: MedusaColors.hairline,
+        border2: MedusaColors.darkBorder2,
+        border3: Colors.white24,
+        highlight: MedusaColors.surfaceHi,
+        drag_indicator: MedusaColors.textMuted,
+        shadow: MedusaColors.biolumeGlow,
+        errorBannerBg: MedusaColors.darkErrorBannerBg,
+        me: MedusaColors.biolume,
+        toastBg: MedusaColors.deepSea.withOpacity(0.92),
+        toastText: MedusaColors.textPrimary,
+        divider: Colors.white24,
+      );
 
   @override
   ThemeExtension<ColorThemeExtension> copyWith({
@@ -253,18 +253,18 @@ class ColorThemeExtension extends ThemeExtension<ColorThemeExtension> {
 class MyTheme {
   MyTheme._();
 
-  static const Color grayBg = MedusaColors.lightBg;
-  static const Color accent = MedusaColors.biolume;
-  static const Color accent50 = Color(0x7700E5C7);
-  static const Color accent80 = Color(0xAA00B39B);
-  static const Color canvasColor = MedusaColors.abyss;
-  static const Color border = MedusaColors.lightHairline;
-  static const Color idColor = MedusaColors.biolume;
-  static const Color darkGray = MedusaColors.textMuted;
-  static const Color cmIdColor = MedusaColors.biolumeDim;
+  static Color get grayBg => MedusaColors.lightBg;
+  static Color get accent => MedusaColors.biolume;
+  static Color get accent50 => MedusaColors.biolume.withOpacity(0.47);
+  static Color get accent80 => MedusaColors.biolumeDim.withOpacity(0.67);
+  static Color get canvasColor => MedusaColors.abyss;
+  static Color get border => MedusaColors.lightHairline;
+  static Color get idColor => MedusaColors.biolume;
+  static Color get darkGray => MedusaColors.textMuted;
+  static Color get cmIdColor => MedusaColors.biolumeDim;
   static const Color dark = Colors.black87;
-  static const Color button = MedusaColors.biolumeDim;
-  static const Color hoverBorder = MedusaColors.biolume;
+  static Color get button => MedusaColors.biolumeDim;
+  static Color get hoverBorder => MedusaColors.biolume;
 
   // ListTile
   static const ListTileThemeData listTileTheme = ListTileThemeData(
@@ -374,224 +374,257 @@ class MyTheme {
     }),
   );
 
-  static ThemeData lightTheme = ThemeData(
-    // https://stackoverflow.com/questions/77537315/after-upgrading-to-flutter-3-16-the-app-bar-background-color-button-size-and
-    useMaterial3: false,
-    brightness: Brightness.light,
-    hoverColor: MedusaColors.lightHover,
-    scaffoldBackgroundColor: Colors.white,
-    dialogBackgroundColor: Colors.white,
-    appBarTheme: AppBarTheme(
-      shadowColor: Colors.transparent,
-    ),
-    dialogTheme: DialogTheme(
-      elevation: 15,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18.0),
-        side: BorderSide(
-          width: 1,
-          color: MedusaColors.lightHairline,
+  static ThemeData get lightTheme => ThemeData(
+        // https://stackoverflow.com/questions/77537315/after-upgrading-to-flutter-3-16-the-app-bar-background-color-button-size-and
+        useMaterial3: false,
+        brightness: Brightness.light,
+        hoverColor: MedusaColors.lightHover,
+        scaffoldBackgroundColor: Colors.white,
+        dialogBackgroundColor: Colors.white,
+        appBarTheme: const AppBarTheme(
+          shadowColor: Colors.transparent,
         ),
-      ),
-    ),
-    scrollbarTheme: scrollbarTheme,
-    inputDecorationTheme: isDesktop
-        ? InputDecorationTheme(
-            fillColor: grayBg,
-            filled: true,
-            isDense: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+        dialogTheme: DialogThemeData(
+          elevation: 15,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18.0),
+            side: BorderSide(
+              width: 1,
+              color: MedusaColors.lightHairline,
             ),
-          )
-        : null,
-    textTheme: const TextTheme(
-        titleLarge: TextStyle(fontSize: 19, color: Colors.black87),
-        titleSmall: TextStyle(fontSize: 14, color: Colors.black87),
-        bodySmall: TextStyle(fontSize: 12, color: Colors.black87, height: 1.25),
-        bodyMedium:
-            TextStyle(fontSize: 14, color: Colors.black87, height: 1.25),
-        labelLarge: TextStyle(fontSize: 16.0, color: MyTheme.accent80)),
-    cardColor: grayBg,
-    hintColor: Color(0xFFAAAAAA),
-    visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
-      labelColor: Colors.black87,
-    ),
-    tooltipTheme: tooltipTheme(),
-    splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-    highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-    splashFactory: (isDesktop || isWebDesktop) ? NoSplash.splashFactory : null,
-    textButtonTheme: (isDesktop || isWebDesktop)
-        ? TextButtonThemeData(
-            style: TextButton.styleFrom(
-              splashFactory: NoSplash.splashFactory,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18.0),
-              ),
+          ),
+        ),
+        scrollbarTheme: scrollbarTheme,
+        inputDecorationTheme: isDesktop
+            ? InputDecorationTheme(
+                fillColor: grayBg,
+                filled: true,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              )
+            : null,
+        textTheme: TextTheme(
+            titleLarge: const TextStyle(fontSize: 19, color: Colors.black87),
+            titleSmall: const TextStyle(fontSize: 14, color: Colors.black87),
+            bodySmall: const TextStyle(
+                fontSize: 12, color: Colors.black87, height: 1.25),
+            bodyMedium: const TextStyle(
+                fontSize: 14, color: Colors.black87, height: 1.25),
+            labelLarge: TextStyle(fontSize: 16.0, color: MyTheme.accent80)),
+        cardColor: grayBg,
+        hintColor: Color(0xFFAAAAAA),
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        tabBarTheme: const TabBarThemeData(
+          labelColor: Colors.black87,
+        ),
+        tooltipTheme: tooltipTheme(),
+        splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
+        highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
+        splashFactory:
+            (isDesktop || isWebDesktop) ? NoSplash.splashFactory : null,
+        textButtonTheme: (isDesktop || isWebDesktop)
+            ? TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  splashFactory: NoSplash.splashFactory,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.0),
+                  ),
+                ),
+              )
+            : mobileTextButtonTheme,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: MyTheme.button,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10.0),
             ),
-          )
-        : mobileTextButtonTheme,
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: MyTheme.button,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10.0),
+          ),
         ),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        backgroundColor: grayBg,
-        foregroundColor: Colors.black87,
-        side: BorderSide(color: MedusaColors.lightHairline),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10.0),
-        ),
-      ),
-    ),
-    switchTheme: switchTheme(),
-    radioTheme: radioTheme(),
-    checkboxTheme: checkboxTheme,
-    listTileTheme: listTileTheme,
-    menuBarTheme: MenuBarThemeData(
-        style:
-            MenuStyle(backgroundColor: MaterialStatePropertyAll(Colors.white))),
-    colorScheme: ColorScheme.light(
-        primary: MedusaColors.biolumeDim,
-        secondary: MedusaColors.violet,
-        background: grayBg),
-    popupMenuTheme: PopupMenuThemeData(
-        color: Colors.white,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(
-              color: (isDesktop || isWebDesktop)
-                  ? MedusaColors.lightHairline
-                  : Colors.transparent),
-          borderRadius: BorderRadius.all(Radius.circular(8.0)),
-        )),
-  ).copyWith(
-    extensions: <ThemeExtension<dynamic>>[
-      ColorThemeExtension.light,
-      TabbarTheme.light,
-    ],
-  );
-  static ThemeData darkTheme = ThemeData(
-    useMaterial3: false,
-    brightness: Brightness.dark,
-    hoverColor: MedusaColors.surfaceHi,
-    scaffoldBackgroundColor: MedusaColors.abyss,
-    dialogBackgroundColor: MedusaColors.deepSea,
-    appBarTheme: AppBarTheme(
-      shadowColor: Colors.transparent,
-    ),
-    dialogTheme: DialogTheme(
-      elevation: 15,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18.0),
-        side: BorderSide(
-          width: 1,
-          color: MedusaColors.hairline,
-        ),
-      ),
-    ),
-    scrollbarTheme: scrollbarThemeDark,
-    inputDecorationTheme: (isDesktop || isWebDesktop)
-        ? InputDecorationTheme(
-            fillColor: MedusaColors.surface,
-            filled: true,
-            isDense: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            backgroundColor: grayBg,
+            foregroundColor: Colors.black87,
+            side: BorderSide(color: MedusaColors.lightHairline),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10.0),
             ),
-          )
-        : null,
-    textTheme: const TextTheme(
-      titleLarge: TextStyle(fontSize: 19),
-      titleSmall: TextStyle(fontSize: 14),
-      bodySmall: TextStyle(fontSize: 12, height: 1.25),
-      bodyMedium: TextStyle(fontSize: 14, height: 1.25),
-      labelLarge: TextStyle(
-        fontSize: 16.0,
-        fontWeight: FontWeight.bold,
-        color: accent80,
-      ),
-    ),
-    cardColor: MedusaColors.surface,
-    visualDensity: VisualDensity.adaptivePlatformDensity,
-    tabBarTheme: const TabBarTheme(
-      labelColor: MedusaColors.textPrimary,
-    ),
-    tooltipTheme: tooltipTheme(),
-    splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-    highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
-    splashFactory: (isDesktop || isWebDesktop) ? NoSplash.splashFactory : null,
-    textButtonTheme: (isDesktop || isWebDesktop)
-        ? TextButtonThemeData(
-            style: TextButton.styleFrom(
-              splashFactory: NoSplash.splashFactory,
-              disabledForegroundColor: Colors.white70,
-              foregroundColor: Colors.white70,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18.0),
-              ),
+          ),
+        ),
+        switchTheme: switchTheme(),
+        radioTheme: radioTheme(),
+        checkboxTheme: checkboxTheme,
+        listTileTheme: listTileTheme,
+        menuBarTheme: MenuBarThemeData(
+            style: MenuStyle(
+                backgroundColor: MaterialStatePropertyAll(Colors.white))),
+        colorScheme: ColorScheme.light(
+            primary: MedusaColors.biolumeDim,
+            secondary: MedusaColors.violet,
+            background: grayBg),
+        popupMenuTheme: PopupMenuThemeData(
+            color: Colors.white,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(
+                  color: (isDesktop || isWebDesktop)
+                      ? MedusaColors.lightHairline
+                      : Colors.transparent),
+              borderRadius: const BorderRadius.all(Radius.circular(8.0)),
+            )),
+      ).copyWith(
+        extensions: <ThemeExtension<dynamic>>[
+          ColorThemeExtension.light,
+          TabbarTheme.light,
+        ],
+      );
+  static ThemeData get darkTheme => ThemeData(
+        useMaterial3: false,
+        brightness: Brightness.dark,
+        hoverColor: MedusaColors.surfaceHi,
+        scaffoldBackgroundColor: MedusaColors.abyss,
+        dialogBackgroundColor: MedusaColors.deepSea,
+        appBarTheme: const AppBarTheme(
+          shadowColor: Colors.transparent,
+        ),
+        dialogTheme: DialogThemeData(
+          elevation: 15,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18.0),
+            side: BorderSide(
+              width: 1,
+              color: MedusaColors.hairline,
             ),
-          )
-        : mobileTextButtonTheme,
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: MyTheme.accent,
-        foregroundColor: MedusaColors.inkOnBiolume,
-        disabledForegroundColor: Colors.white70,
-        disabledBackgroundColor: Colors.white10,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10.0),
+          ),
         ),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        backgroundColor: MedusaColors.surface,
-        side: BorderSide(color: MedusaColors.hairline, width: 1),
-        disabledForegroundColor: Colors.white70,
-        foregroundColor: MedusaColors.textPrimary,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10.0),
+        scrollbarTheme: scrollbarThemeDark,
+        inputDecorationTheme: (isDesktop || isWebDesktop)
+            ? InputDecorationTheme(
+                fillColor: MedusaColors.surface,
+                filled: true,
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              )
+            : null,
+        textTheme: TextTheme(
+          titleLarge: const TextStyle(fontSize: 19),
+          titleSmall: const TextStyle(fontSize: 14),
+          bodySmall: const TextStyle(fontSize: 12, height: 1.25),
+          bodyMedium: const TextStyle(fontSize: 14, height: 1.25),
+          labelLarge: TextStyle(
+            fontSize: 16.0,
+            fontWeight: FontWeight.bold,
+            color: accent80,
+          ),
         ),
-      ),
-    ),
-    switchTheme: switchTheme(),
-    radioTheme: radioTheme(),
-    checkboxTheme: checkboxTheme,
-    listTileTheme: listTileTheme,
-    menuBarTheme: MenuBarThemeData(
-        style: MenuStyle(
-            backgroundColor: MaterialStatePropertyAll(MedusaColors.deepSea))),
-    colorScheme: ColorScheme.dark(
-      primary: accent,
-      secondary: MedusaColors.violet,
-      background: MedusaColors.surface,
-    ),
-    popupMenuTheme: PopupMenuThemeData(
-        color: MedusaColors.deepSea,
-        shape: RoundedRectangleBorder(
-      side: BorderSide(color: MedusaColors.hairline),
-      borderRadius: BorderRadius.all(Radius.circular(8.0)),
-    )),
-  ).copyWith(
-    extensions: <ThemeExtension<dynamic>>[
-      ColorThemeExtension.dark,
-      TabbarTheme.dark,
-    ],
-  );
+        cardColor: MedusaColors.surface,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        tabBarTheme: TabBarThemeData(
+          labelColor: MedusaColors.textPrimary,
+        ),
+        tooltipTheme: tooltipTheme(),
+        splashColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
+        highlightColor: (isDesktop || isWebDesktop) ? Colors.transparent : null,
+        splashFactory:
+            (isDesktop || isWebDesktop) ? NoSplash.splashFactory : null,
+        textButtonTheme: (isDesktop || isWebDesktop)
+            ? TextButtonThemeData(
+                style: TextButton.styleFrom(
+                  splashFactory: NoSplash.splashFactory,
+                  disabledForegroundColor: Colors.white70,
+                  foregroundColor: Colors.white70,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18.0),
+                  ),
+                ),
+              )
+            : mobileTextButtonTheme,
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: MyTheme.accent,
+            foregroundColor: MedusaColors.inkOnBiolume,
+            disabledForegroundColor: Colors.white70,
+            disabledBackgroundColor: Colors.white10,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10.0),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            backgroundColor: MedusaColors.surface,
+            side: BorderSide(color: MedusaColors.hairline, width: 1),
+            disabledForegroundColor: Colors.white70,
+            foregroundColor: MedusaColors.textPrimary,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10.0),
+            ),
+          ),
+        ),
+        switchTheme: switchTheme(),
+        radioTheme: radioTheme(),
+        checkboxTheme: checkboxTheme,
+        listTileTheme: listTileTheme,
+        menuBarTheme: MenuBarThemeData(
+            style: MenuStyle(
+                backgroundColor:
+                    MaterialStatePropertyAll(MedusaColors.deepSea))),
+        colorScheme: ColorScheme.dark(
+          primary: accent,
+          secondary: MedusaColors.violet,
+          background: MedusaColors.surface,
+        ),
+        popupMenuTheme: PopupMenuThemeData(
+            color: MedusaColors.deepSea,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: MedusaColors.hairline),
+              borderRadius: BorderRadius.all(Radius.circular(8.0)),
+            )),
+      ).copyWith(
+        extensions: <ThemeExtension<dynamic>>[
+          ColorThemeExtension.dark,
+          TabbarTheme.dark,
+        ],
+      );
+
+  static ThemeData themeDataForMode(ThemeMode mode) {
+    final resolvedMode = mode == ThemeMode.system
+        ? (WidgetsBinding.instance.platformDispatcher.platformBrightness ==
+                Brightness.light
+            ? ThemeMode.light
+            : ThemeMode.dark)
+        : mode;
+    return resolvedMode == ThemeMode.light ? lightTheme : darkTheme;
+  }
 
   static ThemeMode getThemeModePreference() {
     return themeModeFromString(bind.mainGetLocalOption(key: kCommConfKeyTheme));
   }
 
+  static String getSkinPreference() {
+    return MedusaSkins.normalize(
+        bind.mainGetLocalOption(key: kCommConfKeySkin));
+  }
+
+  static void loadSkinPreference() {
+    MedusaSkins.setCurrent(getSkinPreference());
+  }
+
+  static Future<void> changeSkin(String key) async {
+    final normalized = MedusaSkins.normalize(key);
+    MedusaSkins.setCurrent(normalized);
+    Get.changeTheme(themeDataForMode(currentThemeMode()));
+    if (desktopType == DesktopType.main || isAndroid || isIOS || isWeb) {
+      await bind.mainSetLocalOption(key: kCommConfKeySkin, value: normalized);
+    }
+  }
+
   static Future<void> changeDarkMode(ThemeMode mode) async {
     Get.changeThemeMode(mode);
+    Get.changeTheme(themeDataForMode(mode));
     if (desktopType == DesktopType.main || isAndroid || isIOS || isWeb) {
       if (mode == ThemeMode.system) {
         await bind.mainSetLocalOption(
@@ -938,8 +971,8 @@ class OverlayDialogManager {
                                   style: flatButtonStyle,
                                   onPressed: cancel,
                                   child: Text(translate('Cancel'),
-                                      style: const TextStyle(
-                                          color: MyTheme.accent)))))
+                                      style:
+                                          TextStyle(color: MyTheme.accent)))))
                 ])),
         onCancel: showCancel ? cancel : null,
       );

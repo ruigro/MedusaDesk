@@ -610,7 +610,9 @@ class _DesktopTabState extends State<DesktopTab>
                               .then((value) => stateGlobal.setMaximized(value));
                         }
                       }
-                    : (isIncomingHomePage ? () {} : null), // Keep tap recognizer for Windows touch.
+                    : (isIncomingHomePage
+                        ? () {}
+                        : null), // Keep tap recognizer for Windows touch.
                 onPanStart: (_) => startDragging(isMainWindow),
                 onPanCancel: () {
                   // We want to disable dragging of the tab area in the tab bar.
@@ -1455,19 +1457,19 @@ class TabbarTheme extends ThemeExtension<TabbarTheme> {
       required this.closeHoverColor,
       required this.selectedTabBackgroundColor});
 
-  static const light = TabbarTheme(
+  static TabbarTheme get light => TabbarTheme(
       selectedTabIconColor: MedusaColors.biolumeDim,
       unSelectedTabIconColor: MedusaColors.textMuted,
       selectedTextColor: Colors.black,
-      unSelectedTextColor: Color.fromARGB(255, 112, 112, 112),
-      selectedIconColor: Color.fromARGB(255, 26, 26, 26),
-      unSelectedIconColor: Color.fromARGB(255, 96, 96, 96),
+      unSelectedTextColor: const Color.fromARGB(255, 112, 112, 112),
+      selectedIconColor: const Color.fromARGB(255, 26, 26, 26),
+      unSelectedIconColor: const Color.fromARGB(255, 96, 96, 96),
       dividerColor: MedusaColors.lightHairline,
       hoverColor: MedusaColors.lightHover,
       closeHoverColor: Colors.white,
       selectedTabBackgroundColor: Colors.white54);
 
-  static const dark = TabbarTheme(
+  static TabbarTheme get dark => TabbarTheme(
       selectedTabIconColor: MedusaColors.biolume,
       unSelectedTabIconColor: MedusaColors.textMuted,
       selectedTextColor: MedusaColors.textPrimary,

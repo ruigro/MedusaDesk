@@ -621,7 +621,7 @@ void showOptions(
         )));
   }
   if (displays.isNotEmpty) {
-    displays.add(const Divider(color: MyTheme.border));
+    displays.add(Divider(color: MyTheme.border));
   }
 
   List<TRadioMenu<String>> viewStyleRadios =
@@ -651,7 +651,7 @@ void showOptions(
                     if (v != null) viewStyle.value = v;
                   }
                 : null)),
-      const Divider(color: MyTheme.border),
+      Divider(color: MyTheme.border),
       for (var e in imageQualityRadios)
         Obx(() => getRadio<String>(
             e.child,
@@ -663,7 +663,7 @@ void showOptions(
                     if (v != null) imageQuality.value = v;
                   }
                 : null)),
-      const Divider(color: MyTheme.border),
+      Divider(color: MyTheme.border),
       for (var e in codecRadios)
         Obx(() => getRadio<String>(
             e.child,
@@ -675,7 +675,7 @@ void showOptions(
                     if (v != null) codec.value = v;
                   }
                 : null)),
-      if (codecRadios.isNotEmpty) const Divider(color: MyTheme.border),
+      if (codecRadios.isNotEmpty) Divider(color: MyTheme.border),
     ];
 
     final rxToggleValues = displayToggles.map((e) => e.value.obs).toList();
@@ -700,7 +700,7 @@ void showOptions(
 
     var popupDialogMenus = List<Widget>.empty(growable: true);
     if (popupDialogMenus.isNotEmpty) {
-      popupDialogMenus.add(const Divider(color: MyTheme.border));
+      popupDialogMenus.add(Divider(color: MyTheme.border));
     }
 
     return CustomAlertDialog(

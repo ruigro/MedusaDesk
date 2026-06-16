@@ -33,7 +33,7 @@ class DesktopHomePage extends StatefulWidget {
   State<DesktopHomePage> createState() => _DesktopHomePageState();
 }
 
-const borderColor = MedusaColors.biolume;
+Color get borderColor => MedusaColors.biolume;
 
 class _DesktopHomePageState extends State<DesktopHomePage>
     with AutomaticKeepAliveClientMixin, WidgetsBindingObserver {
@@ -189,7 +189,7 @@ class _DesktopHomePageState extends State<DesktopHomePage>
 
   /// Medusa hero/panel card decoration, adapting to light/dark mode.
   BoxDecoration _medusaPanel(BuildContext context,
-      {bool hero = false, Color glowColor = MedusaColors.biolumeGlow}) {
+      {bool hero = false, Color? glowColor}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return BoxDecoration(
       gradient: isDark && hero ? MedusaColors.heroGradient : null,

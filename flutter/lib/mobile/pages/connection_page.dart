@@ -229,7 +229,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                         onChanged: (String text) {
                           _idController.id = text;
                         },
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontFamily: 'WorkSans',
                           fontWeight: FontWeight.bold,
                           fontSize: 30,
@@ -239,12 +239,12 @@ class _ConnectionPageState extends State<ConnectionPage> {
                           labelText: translate('Remote ID'),
                           // hintText: 'Enter your remote ID',
                           border: InputBorder.none,
-                          helperStyle: const TextStyle(
+                          helperStyle: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 16,
                             color: MyTheme.darkGray,
                           ),
-                          labelStyle: const TextStyle(
+                          labelStyle: TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
                             letterSpacing: 0.2,
@@ -337,7 +337,7 @@ class _ConnectionPageState extends State<ConnectionPage> {
                 width: 60,
                 height: 60,
                 child: IconButton(
-                  icon: const Icon(Icons.arrow_forward,
+                  icon: Icon(Icons.arrow_forward,
                       color: MyTheme.darkGray, size: 45),
                   onPressed: onConnect,
                 ),

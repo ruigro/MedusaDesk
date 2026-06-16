@@ -335,11 +335,11 @@ class _PeerCardState extends State<_PeerCard>
                                       child: Text(
                                         name,
                                         style: TextStyle(
-                                            color: Theme.of(context)
-                                                        .brightness ==
-                                                    Brightness.dark
-                                                ? Colors.white70
-                                                : Colors.black54,
+                                            color:
+                                                Theme.of(context).brightness ==
+                                                        Brightness.dark
+                                                    ? Colors.white70
+                                                    : Colors.black54,
                                             fontSize: 12),
                                         textAlign: TextAlign.center,
                                         overflow: TextOverflow.ellipsis,
@@ -543,7 +543,7 @@ abstract class BasePeerCard extends StatelessWidget {
       (await _buildMenuItems(context))
           .map((e) => e.build(
               context,
-              const MenuConfig(
+              MenuConfig(
                   commonColor: CustomPopupMenuTheme.commonColor,
                   height: CustomPopupMenuTheme.height,
                   dividerHeight: CustomPopupMenuTheme.dividerHeight)))

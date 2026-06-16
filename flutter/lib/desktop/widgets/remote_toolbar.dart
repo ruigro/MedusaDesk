@@ -327,12 +327,12 @@ class ToolbarState {
 }
 
 class _ToolbarTheme {
-  static const Color blueColor = MyTheme.button;
-  static const Color hoverBlueColor = MyTheme.accent;
-  static Color inactiveColor = MedusaColors.textMuted;
-  static Color hoverInactiveColor = MedusaColors.surfaceHi;
+  static Color get blueColor => MyTheme.button;
+  static Color get hoverBlueColor => MyTheme.accent;
+  static Color get inactiveColor => MedusaColors.textMuted;
+  static Color get hoverInactiveColor => MedusaColors.surfaceHi;
 
-  static const Color redColor = MedusaColors.danger;
+  static Color get redColor => MedusaColors.danger;
   static const Color hoverRedColor = Colors.red;
   // kMinInteractiveDimension
   static const double height = 20.0;
@@ -3227,16 +3227,16 @@ class _DraggableShowHideState extends State<_DraggableShowHide> {
     final isFullscreen = stateGlobal.fullscreen;
     const double iconSize = 20;
 
-    buttonWrapper(VoidCallback? onPressed, Widget child,
-        {Color hoverColor = _ToolbarTheme.blueColor}) {
+    buttonWrapper(VoidCallback? onPressed, Widget child, {Color? hoverColor}) {
       final bgColor = buttonStyle.backgroundColor?.resolve({});
+      final resolvedHoverColor = hoverColor ?? _ToolbarTheme.blueColor;
       return TextButton(
         onPressed: onPressed,
         child: child,
         style: buttonStyle.copyWith(
           backgroundColor: MaterialStateProperty.resolveWith((states) {
             if (states.contains(MaterialState.hovered)) {
-              return (bgColor ?? hoverColor).withOpacity(0.15);
+              return (bgColor ?? resolvedHoverColor).withOpacity(0.15);
             }
             return bgColor;
           }),

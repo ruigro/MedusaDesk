@@ -248,8 +248,7 @@ class ServiceNotRunningNotification extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(translate("android_start_service_tip"),
-                    style:
-                        const TextStyle(fontSize: 12, color: MyTheme.darkGray))
+                    style: TextStyle(fontSize: 12, color: MyTheme.darkGray))
                 .marginOnly(bottom: 8),
             ElevatedButton.icon(
                 icon: const Icon(Icons.play_arrow),
@@ -635,7 +634,7 @@ class _PermissionCheckerState extends State<PermissionChecker> {
                   Expanded(
                       child: Text(
                     translate("android_version_audio_tip"),
-                    style: const TextStyle(color: MyTheme.darkGray),
+                    style: TextStyle(color: MyTheme.darkGray),
                   ))
                 ]),
           PermissionRow(

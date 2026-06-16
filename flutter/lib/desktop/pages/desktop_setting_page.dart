@@ -38,7 +38,7 @@ const double _kRadioLeftMargin = 10;
 const double _kListViewBottomMargin = 15;
 const double _kTitleFontSize = 20;
 const double _kContentFontSize = 15;
-const Color _accentColor = MyTheme.accent;
+Color get _accentColor => MyTheme.accent;
 const String _kSettingPageControllerTag = 'settingPageController';
 const String _kSettingPageTabKeyTag = 'settingPageTabKey';
 
@@ -318,7 +318,7 @@ class _DesktopSettingPageState extends State<DesktopSettingPage>
     final settingsText = Text(
       translate('Settings'),
       textAlign: TextAlign.left,
-      style: const TextStyle(
+      style: TextStyle(
         color: _accentColor,
         fontSize: _kTitleFontSize,
         fontWeight: FontWeight.w400,
@@ -437,8 +437,14 @@ class _GeneralState extends State<_General> {
 
   Widget theme() {
     final current = MyTheme.getThemeModePreference().toShortString();
+    final currentSkin = MyTheme.getSkinPreference();
     onChanged(String value) async {
       await MyTheme.changeDarkMode(MyTheme.themeModeFromString(value));
+      setState(() {});
+    }
+
+    onSkinChanged(String value) async {
+      await MyTheme.changeSkin(value);
       setState(() {});
     }
 
@@ -459,6 +465,12 @@ class _GeneralState extends State<_General> {
           groupValue: current,
           label: 'Follow System',
           onChanged: isOptFixed ? null : onChanged),
+      Divider(height: 22, color: Theme.of(context).dividerColor),
+      ...MedusaSkins.all.map((skin) => _Radio<String>(context,
+          value: skin.key,
+          groupValue: currentSkin,
+          label: skin.label,
+          onChanged: onSkinChanged)),
     ]);
   }
 
