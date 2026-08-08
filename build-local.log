@@ -1,0 +1,21 @@
+﻿python :    Compiling windows v0.51.1
+At line:1 char:486
++ ... Git\vcpkg'; python build.py --portable --hwcodec --flutter --vram --s ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (   Compiling windows v0.51.1:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+   Compiling sysinfo v0.29.10 (https://github.com/rustdesk-org/sysinfo?branch=rlim_max#90b1705d)
+   Compiling hbb_common v0.1.0 (C:\Users\mc\AppData\Local\owllm\fleet\MedusaDesk\pmsjny290t1ty\code\libs\hbb_common)
+warning: direct cast of function item into an integer
+  --> libs\hbb_common\src\platform\mod.rs:80:62
+   |
+80 |         libc::signal(libc::SIGSEGV, breakdown_signal_handler as _);
+   |                                                              ^^^^
+   |
+   = note: `#[warn(function_casts_as_integer)]` on by default
+help: first cast to a pointer `as *const ()`
+   |
+80 |         libc::signal(libc::SIGSEGV, breakdown_signal_handler as *const () as _);
+   |                                                              ++++++++++++
+

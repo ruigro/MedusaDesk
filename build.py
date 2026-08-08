@@ -433,6 +433,59 @@ def build_flutter_arch_manjaro(version, features):
     system2('HBB=`pwd`/.. FLUTTER=1 makepkg -f')
 
 
+def find_signtool():
+    '''Locate signtool.exe: SIGNTOOL env, then PATH, then the Windows SDK.'''
+    custom = os.environ.get('SIGNTOOL')
+    if custom:
+        return custom if os.path.exists(custom) else None
+    found = shutil.which('signtool')
+    if found:
+        return found
+    kits = Path(os.environ.get('ProgramFiles(x86)',
+                               'C:/Program Files (x86)')) / 'Windows Kits/10/bin'
+    candidates = sorted(kits.glob('*/x64/signtool.exe'), reverse=True)
+    return str(candidates[0]) if candidates else None
+
+
+def sign_windows_files(files):
+    '''Sign artifacts with a certificate held in the OS certificate store.
+
+    No .pfx and no password: the private key never leaves its store, which is
+    what a non-exportable cloud/HSM key requires, and it keeps every secret out
+    of the repo and out of the build. The certificate is selected by SHA1
+    thumbprint (SIGN_SHA1) or by subject substring (SIGN_SUBJECT); neither a
+    thumbprint nor a company name is a secret. With neither set, nothing is
+    signed and the build says so.
+    '''
+    files = [f for f in files if os.path.exists(f)]
+    if not files:
+        return
+    sha1 = os.environ.get('SIGN_SHA1')
+    subject = os.environ.get('SIGN_SUBJECT')
+    if sha1:
+        selector = f'/sha1 {sha1}'
+    elif subject:
+        selector = f'/n "{subject}"'
+    else:
+        print('Not signed: set SIGN_SHA1 (thumbprint) or SIGN_SUBJECT to sign')
+        return
+    signtool = find_signtool()
+    if not signtool:
+        sys.stderr.write(
+            'Error occurred when signing: signtool.exe not found. Install the '
+            'Windows SDK or set SIGNTOOL to its full path. Exiting.\n')
+        sys.exit(-1)
+    timestamp = os.environ.get('SIGN_TIMESTAMP_URL', 'http://time.certum.pl')
+    targets = ' '.join(f'"{f}"' for f in files)
+    # cmd.exe strips the outer quote pair when a command both starts and ends
+    # with a quoted token, which breaks a signtool path under "Program Files".
+    # The extra wrapping pair is what survives that stripping.
+    system2(f'""{signtool}" sign {selector} /fd sha256 '
+            f'/tr {timestamp} /td sha256 {targets}"')
+    # An unverified signature is not evidence that the artifact is signed.
+    system2(f'""{signtool}" verify /pa /all {targets}"')
+
+
 def build_flutter_windows(version, features, skip_portable_pack):
     if not skip_cargo:
         system2(f'cargo build --locked --features {features} --lib --release')
@@ -444,6 +497,11 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('..')
     shutil.copy2('target/release/deps/dylib_virtual_display.dll',
                  flutter_build_dir_2)
+    # Sign the bundle before packing, so the portable exe carries signed
+    # payloads as well as its own signature.
+    sign_windows_files([f'{flutter_build_dir_2}/rustdesk.exe',
+                        f'{flutter_build_dir_2}/librustdesk.dll',
+                        f'{flutter_build_dir_2}/dylib_virtual_display.dll'])
     if skip_portable_pack:
         return
     os.chdir('libs/portable')
@@ -460,6 +518,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
     print(
         f'output location: {os.path.abspath(os.curdir)}/rustdesk_portable.exe')
     os.rename('./rustdesk_portable.exe', f'./rustdesk-{version}-install.exe')
+    sign_windows_files([f'./rustdesk-{version}-install.exe'])
     print(
         f'output location: {os.path.abspath(os.curdir)}/rustdesk-{version}-install.exe')
 
