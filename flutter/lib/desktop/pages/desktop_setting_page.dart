@@ -2556,6 +2556,7 @@ class _AiAgentsState extends State<_AiAgents>
     final controller = TextEditingController(
         text: bind.mainGetOptionSync(key: kOptionAgentHttpPort));
     final applyEnabled = false.obs;
+    final token = bind.mainGetOptionSync(key: kOptionAgentHttpToken);
     return _Card(title: 'AI Agent Gateway', children: [
       _hint(context,
           'Let AI agents (Claude Code, Cursor, scripts over SSH) control your saved peers: screenshots, input, commands and file transfer. Agents authenticate with the same peer passwords as you do.'),
@@ -2605,6 +2606,13 @@ class _AiAgentsState extends State<_AiAgents>
         ]),
         enabled: true,
       ),
+      _hint(context,
+          'Every request to the gateway must carry this token as the header "Authorization: Bearer <token>". Anything that has it can control your saved peers, so keep it on this machine.'),
+      _snippet(
+          context,
+          token.isEmpty
+              ? translate('Restart Medusa Desk to generate a gateway token')
+              : token),
       _hint(context,
           'Start the gateway with "medusadesk agent serve", or use the one-shot CLI: "medusadesk agent screenshot --peer <ID> --out shot.png".'),
     ]);

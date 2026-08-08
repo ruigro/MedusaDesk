@@ -1,9 +1,13 @@
 //! Localhost-only HTTP/1.1 JSON API (hand-rolled over tokio TcpListener; no
 //! new dependencies). One request per connection, `Connection: close`.
 //!
+//! Every request must carry `Authorization: Bearer <token>` and a loopback
+//! `Host`; see [`super::request`] for why the loopback bind is not enough.
+//!
 //! Routes:
 //!   GET  /status                       -> { status, version, sessions }
 //!   GET  /peers                        -> [ { id, alias, hostname, ... } ]
+//!   POST /displays    { peer }                      -> [ { index, width, ... } ]
 //!   POST /screenshot  { peer, display? }            -> image/png bytes
 //!   POST /input/mouse { peer, action, x, y, ... }   -> { ok }
 //!   POST /input/key   { peer, text? | key?, ... }   -> { ok }
@@ -11,6 +15,11 @@
 //!   POST /files/upload   { peer, local_path, remote_path } -> { ok }
 //!   POST /files/download { peer, remote_path, local_path } -> { ok }
 //!   POST /clipboard   { peer, action: "get"|"set", text? } -> { ok | text }
+//!   POST /system/info      { peer }                          -> { stdout, ... }
+//!   POST /system/processes { peer, filter?, limit? }         -> { stdout, ... }
+//!   POST /system/kill      { peer, pid }                     -> { stdout, ... }
+//!   POST /system/services  { peer, limit? }                  -> { stdout, ... }
+//!   POST /system/service   { peer, name, action }            -> { stdout, ... }
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -26,34 +35,45 @@ use hbb_common::{
 };
 use serde_json::{json, Value};
 
-use super::proto::{self, ClipboardReq, ExecReq, KeyReq, MouseReq, ScreenshotReq, TransferReq};
+use super::proto::{
+    self, ClipboardReq, ExecReq, KeyReq, KillReq, MouseReq, PeerReq, ProcessListReq, ScreenshotReq,
+    ServiceListReq, ServiceReq, TransferReq,
+};
+use super::request::{self, Guard, Head, MAX_HEADER};
+use super::system::{self, ServiceAction};
 use super::{Kind, SessionPool};
 
-const MAX_HEADER: usize = 64 * 1024;
 const MAX_BODY: usize = 32 * 1024 * 1024;
 const DEFAULT_EXEC_TIMEOUT_SECS: u64 = 60;
 const TRANSFER_TIMEOUT: Duration = Duration::from_secs(3600);
+/// System tools are short-running; a hung one should not pin a session.
+const SYSTEM_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub async fn serve(pool: Arc<SessionPool>, port: u16) -> ResultType<()> {
+pub async fn serve(pool: Arc<SessionPool>, port: u16, token: String) -> ResultType<()> {
     let listener = TcpListener::bind(("127.0.0.1", port)).await?;
+    let guard = Arc::new(Guard::new(port, token));
     log::info!("[agent] HTTP gateway listening on http://127.0.0.1:{port}");
-    println!("Medusa Desk agent gateway listening on http://127.0.0.1:{port}");
     loop {
         let (stream, addr) = listener.accept().await?;
         if !addr.ip().is_loopback() {
             continue;
         }
         let pool = pool.clone();
+        let guard = guard.clone();
         tokio::spawn(async move {
-            if let Err(e) = handle_conn(stream, pool).await {
+            if let Err(e) = handle_conn(stream, pool, guard).await {
                 log::debug!("[agent] http conn error: {e}");
             }
         });
     }
 }
 
-async fn handle_conn(mut stream: TcpStream, pool: Arc<SessionPool>) -> ResultType<()> {
-    let (method, path, body) = match read_request(&mut stream).await {
+async fn handle_conn(
+    mut stream: TcpStream,
+    pool: Arc<SessionPool>,
+    guard: Arc<Guard>,
+) -> ResultType<()> {
+    let (head, leftover) = match read_head(&mut stream).await {
         Ok(r) => r,
         Err(e) => {
             write_json(&mut stream, 400, &json!({ "error": e.to_string() })).await?;
@@ -61,7 +81,33 @@ async fn handle_conn(mut stream: TcpStream, pool: Arc<SessionPool>) -> ResultTyp
         }
     };
 
-    match route(&method, &path, body, &pool).await {
+    // Authorise before reading a body, so an unauthorised caller can never make
+    // us buffer up to MAX_BODY.
+    if let Err(denied) = guard.check(&head) {
+        log::warn!(
+            "[agent] refused {} {}: {}",
+            head.method,
+            head.path,
+            denied.message()
+        );
+        write_json(
+            &mut stream,
+            denied.status(),
+            &json!({ "error": denied.message() }),
+        )
+        .await?;
+        return Ok(());
+    }
+
+    let body = match read_body(&mut stream, leftover, &head).await {
+        Ok(b) => b,
+        Err(e) => {
+            write_json(&mut stream, 400, &json!({ "error": e.to_string() })).await?;
+            return Ok(());
+        }
+    };
+
+    match route(&head.method, &head.path, body, &pool).await {
         Ok(Reply::Json(v)) => write_json(&mut stream, 200, &v).await?,
         Ok(Reply::Png(bytes)) => write_raw(&mut stream, 200, "image/png", &bytes).await?,
         Err(e) => write_json(&mut stream, 500, &json!({ "error": e.to_string() })).await?,
@@ -74,7 +120,9 @@ enum Reply {
     Png(bytes::Bytes),
 }
 
-async fn read_request(stream: &mut TcpStream) -> ResultType<(String, String, Vec<u8>)> {
+/// Read up to the blank line and parse it, returning the bytes of the body that
+/// arrived in the same read.
+async fn read_head(stream: &mut TcpStream) -> ResultType<(Head, Vec<u8>)> {
     let mut buf = Vec::with_capacity(4096);
     let header_end;
     loop {
@@ -92,33 +140,17 @@ async fn read_request(stream: &mut TcpStream) -> ResultType<(String, String, Vec
             bail!("request header too large");
         }
     }
+    let head = request::parse_head(&buf[..header_end]).map_err(hbb_common::anyhow::Error::msg)?;
+    Ok((head, buf[header_end + 4..].to_vec()))
+}
 
-    let header_text = String::from_utf8_lossy(&buf[..header_end]).to_string();
-    let mut lines = header_text.split("\r\n");
-    let request_line = lines.next().unwrap_or_default();
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or_default().to_owned();
-    let path = parts
-        .next()
-        .unwrap_or_default()
-        .split('?')
-        .next()
-        .unwrap_or_default()
-        .to_owned();
-
-    let mut content_length = 0usize;
-    for line in lines {
-        if let Some((name, value)) = line.split_once(':') {
-            if name.trim().eq_ignore_ascii_case("content-length") {
-                content_length = value.trim().parse().unwrap_or(0);
-            }
-        }
-    }
+async fn read_body(stream: &mut TcpStream, mut body: Vec<u8>, head: &Head) -> ResultType<Vec<u8>> {
+    let content_length = head
+        .content_length()
+        .map_err(hbb_common::anyhow::Error::msg)?;
     if content_length > MAX_BODY {
         bail!("request body too large");
     }
-
-    let mut body = buf[header_end + 4..].to_vec();
     while body.len() < content_length {
         let mut chunk = vec![0u8; (content_length - body.len()).min(64 * 1024)];
         let n = stream.read(&mut chunk).await?;
@@ -128,7 +160,7 @@ async fn read_request(stream: &mut TcpStream) -> ResultType<(String, String, Vec
         body.extend_from_slice(&chunk[..n]);
     }
     body.truncate(content_length);
-    Ok((method, path, body))
+    Ok(body)
 }
 
 fn find_header_end(buf: &[u8]) -> Option<usize> {
@@ -160,6 +192,11 @@ async fn route(
             })))
         }
         ("GET", "/peers") => Ok(Reply::Json(serde_json::to_value(proto::list_peers())?)),
+        ("POST", "/displays") => {
+            let req: PeerReq = parse_body(&body)?;
+            let sess = pool.get(&req.peer, Kind::Control).await?;
+            Ok(Reply::Json(serde_json::to_value(sess.display_list())?))
+        }
         ("POST", "/screenshot") => {
             let req: ScreenshotReq = parse_body(&body)?;
             let sess = pool.get(&req.peer, Kind::Control).await?;
@@ -214,17 +251,61 @@ async fn route(
         }
         ("POST", "/clipboard") => {
             let req: ClipboardReq = parse_body(&body)?;
-            let sess = pool.get(&req.peer, Kind::Control).await?;
             if req.action == "get" {
-                let text = sess.clipboard_get()?;
+                // Reads the remote's clipboard, which needs the terminal
+                // channel; see `AgentSession::clipboard_get`.
+                let sess = pool.get(&req.peer, Kind::Terminal).await?;
+                let text = sess.clipboard_get(SYSTEM_TIMEOUT).await?;
                 Ok(Reply::Json(json!({ "text": text })))
             } else {
+                let sess = pool.get(&req.peer, Kind::Control).await?;
                 sess.clipboard_set(&req.text);
                 Ok(Reply::Json(json!({ "ok": true })))
             }
         }
+        ("POST", "/system/info") => {
+            let req: PeerReq = parse_body(&body)?;
+            system_call(pool, &req.peer, |os| Ok(system::system_info(os))).await
+        }
+        ("POST", "/system/processes") => {
+            let req: ProcessListReq = parse_body(&body)?;
+            system_call(pool, &req.peer, |os| {
+                system::list_processes(os, req.filter.as_deref(), req.limit)
+            })
+            .await
+        }
+        ("POST", "/system/kill") => {
+            let req: KillReq = parse_body(&body)?;
+            system_call(pool, &req.peer, |os| Ok(system::kill_process(os, req.pid))).await
+        }
+        ("POST", "/system/services") => {
+            let req: ServiceListReq = parse_body(&body)?;
+            system_call(pool, &req.peer, |os| Ok(system::list_services(os, req.limit))).await
+        }
+        ("POST", "/system/service") => {
+            let req: ServiceReq = parse_body(&body)?;
+            let action =
+                ServiceAction::parse(&req.action).map_err(hbb_common::anyhow::Error::msg)?;
+            system_call(pool, &req.peer, |os| {
+                system::service_control(os, &req.name, action)
+            })
+            .await
+        }
         _ => bail!("no such endpoint: {method} {path}"),
     }
+}
+
+/// Run one of the typed system tools on the remote. The command depends on the
+/// remote's OS, which is only known once the session is up.
+async fn system_call(
+    pool: &Arc<SessionPool>,
+    peer: &str,
+    build: impl FnOnce(system::Platform) -> Result<String, String>,
+) -> ResultType<Reply> {
+    let sess = pool.get(peer, Kind::Terminal).await?;
+    let command = build(sess.os()).map_err(hbb_common::anyhow::Error::msg)?;
+    let res = sess.exec(&command, SYSTEM_TIMEOUT).await?;
+    Ok(Reply::Json(serde_json::to_value(&res)?))
 }
 
 async fn write_json(stream: &mut TcpStream, status: u16, value: &Value) -> ResultType<()> {
@@ -240,6 +321,8 @@ async fn write_raw(
     let reason = match status {
         200 => "OK",
         400 => "Bad Request",
+        401 => "Unauthorized",
+        403 => "Forbidden",
         _ => "Internal Server Error",
     };
     let head = format!(

@@ -11,11 +11,14 @@ use hbb_common::tokio;
 use serde_json::{json, Value};
 
 use super::proto;
+use super::system::{self, ServiceAction};
 use super::{Kind, SessionPool};
 
 const PROTOCOL_VERSION: &str = "2024-11-05";
 const DEFAULT_EXEC_TIMEOUT_SECS: u64 = 60;
 const TRANSFER_TIMEOUT: Duration = Duration::from_secs(3600);
+/// System tools are short-running; a hung one should not pin a session.
+const SYSTEM_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub async fn serve(pool: Arc<SessionPool>) {
     let stdin = std::io::stdin();
@@ -110,11 +113,18 @@ fn tool_definitions() -> Value {
             "inputSchema": { "type": "object", "properties": {}, "required": [] }
         },
         {
+            "name": "medusa_list_displays",
+            "description": "List the remote machine's displays with their index, size, position and which one is currently captured. Use the index as the 'display' argument to medusa_screenshot.",
+            "inputSchema": { "type": "object", "properties": {
+                "peer": peer_prop()
+            }, "required": ["peer"] }
+        },
+        {
             "name": "medusa_screenshot",
             "description": "Capture the remote machine's screen and return it as a PNG image.",
             "inputSchema": { "type": "object", "properties": {
                 "peer": peer_prop(),
-                "display": { "type": "integer", "description": "Display index, default 0" }
+                "display": { "type": "integer", "description": "Display index (see medusa_list_displays), default 0" }
             }, "required": ["peer"] }
         },
         {
@@ -197,10 +207,51 @@ fn tool_definitions() -> Value {
         },
         {
             "name": "medusa_clipboard_get",
-            "description": "Read clipboard text (local side, mirrors the remote when clipboard sync is enabled).",
+            "description": "Read the clipboard text on the remote machine. Needs terminal permission on the remote.",
             "inputSchema": { "type": "object", "properties": {
                 "peer": peer_prop()
             }, "required": ["peer"] }
+        },
+        {
+            "name": "medusa_system_info",
+            "description": "Get the remote machine's OS version, architecture, uptime and free memory/disk. Prefer this over composing a shell command.",
+            "inputSchema": { "type": "object", "properties": {
+                "peer": peer_prop()
+            }, "required": ["peer"] }
+        },
+        {
+            "name": "medusa_list_processes",
+            "description": "List the remote machine's running processes, largest by memory first.",
+            "inputSchema": { "type": "object", "properties": {
+                "peer": peer_prop(),
+                "filter": { "type": "string", "description": "Only processes whose name contains this (letters, digits and . _ - @ / \\ only)" },
+                "limit": { "type": "integer", "description": "Rows to return, 1-500, default 50" }
+            }, "required": ["peer"] }
+        },
+        {
+            "name": "medusa_kill_process",
+            "description": "Force-terminate a process on the remote machine by PID (see medusa_list_processes).",
+            "inputSchema": { "type": "object", "properties": {
+                "peer": peer_prop(),
+                "pid": { "type": "integer", "description": "Process ID" }
+            }, "required": ["peer", "pid"] }
+        },
+        {
+            "name": "medusa_list_services",
+            "description": "List services on the remote machine (Windows services, systemd units or launchd jobs).",
+            "inputSchema": { "type": "object", "properties": {
+                "peer": peer_prop(),
+                "limit": { "type": "integer", "description": "Rows to return, 1-500, default 50" }
+            }, "required": ["peer"] }
+        },
+        {
+            "name": "medusa_service_control",
+            "description": "Start, stop or restart a service on the remote machine. May need the remote terminal to be elevated.",
+            "inputSchema": { "type": "object", "properties": {
+                "peer": peer_prop(),
+                "name": { "type": "string", "description": "Service name as shown by medusa_list_services" },
+                "action": { "type": "string", "enum": ["start", "stop", "restart"] }
+            }, "required": ["peer", "name", "action"] }
         }
     ])
 }
@@ -234,6 +285,15 @@ async fn call_tool(
         "medusa_list_peers" => {
             let peers = serde_json::to_value(proto::list_peers()).map_err(|e| e.to_string())?;
             Ok(text_content(peers))
+        }
+        "medusa_list_displays" => {
+            let sess = pool
+                .get(&peer, Kind::Control)
+                .await
+                .map_err(|e| e.to_string())?;
+            let displays =
+                serde_json::to_value(sess.display_list()).map_err(|e| e.to_string())?;
+            Ok(text_content(displays))
         }
         "medusa_screenshot" => {
             let sess = pool
@@ -346,13 +406,68 @@ async fn call_tool(
             Ok(text_content(json!({ "ok": true })))
         }
         "medusa_clipboard_get" => {
+            // Reads the remote's clipboard, which needs the terminal channel;
+            // see `AgentSession::clipboard_get`.
             let sess = pool
-                .get(&peer, Kind::Control)
+                .get(&peer, Kind::Terminal)
                 .await
                 .map_err(|e| e.to_string())?;
-            let text = sess.clipboard_get().map_err(|e| e.to_string())?;
+            let text = sess
+                .clipboard_get(SYSTEM_TIMEOUT)
+                .await
+                .map_err(|e| e.to_string())?;
             Ok(text_content(json!({ "text": text })))
+        }
+        "medusa_system_info" => system_call(pool, &peer, |os| Ok(system::system_info(os))).await,
+        "medusa_list_processes" => {
+            let filter = args.get("filter").and_then(|v| v.as_str());
+            let limit = args.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
+            system_call(pool, &peer, |os| {
+                system::list_processes(os, filter, limit)
+            })
+            .await
+        }
+        "medusa_kill_process" => {
+            let pid = args
+                .get("pid")
+                .and_then(|v| v.as_u64())
+                .and_then(|v| u32::try_from(v).ok())
+                .ok_or_else(|| "missing or invalid argument: pid".to_owned())?;
+            system_call(pool, &peer, |os| Ok(system::kill_process(os, pid))).await
+        }
+        "medusa_list_services" => {
+            let limit = args.get("limit").and_then(|v| v.as_u64()).map(|v| v as usize);
+            system_call(pool, &peer, |os| Ok(system::list_services(os, limit))).await
+        }
+        "medusa_service_control" => {
+            let name = arg_str(&args, "name");
+            let action = ServiceAction::parse(&arg_str(&args, "action"))?;
+            system_call(pool, &peer, |os| {
+                system::service_control(os, &name, action)
+            })
+            .await
         }
         other => Err(format!("unknown tool: {other}")),
     }
+}
+
+/// Run one of the typed system tools on the remote. The command depends on the
+/// remote's OS, which is only known once the session is up.
+async fn system_call(
+    pool: &Arc<SessionPool>,
+    peer: &str,
+    build: impl FnOnce(system::Platform) -> Result<String, String>,
+) -> Result<Vec<Value>, String> {
+    let sess = pool
+        .get(peer, Kind::Terminal)
+        .await
+        .map_err(|e| e.to_string())?;
+    let command = build(sess.os())?;
+    let res = sess
+        .exec(&command, SYSTEM_TIMEOUT)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(text_content(
+        serde_json::to_value(&res).map_err(|e| e.to_string())?,
+    ))
 }

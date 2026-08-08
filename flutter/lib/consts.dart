@@ -98,6 +98,7 @@ const String kOptionDirectAccessPort = "direct-access-port";
 // AI agent gateway (see src/agent in the Rust core).
 const String kOptionAgentHttpEnabled = "agent-http-enabled";
 const String kOptionAgentHttpPort = "agent-http-port";
+const String kOptionAgentHttpToken = "agent-http-token";
 const String kOptionAgentSessions = "agent-sessions";
 const String kDefaultAgentHttpPort = "21120";
 const String kOptionAllowAutoDisconnect = "allow-auto-disconnect";

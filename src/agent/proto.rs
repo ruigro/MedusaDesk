@@ -3,6 +3,21 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
+pub struct DisplayDto {
+    /// Index to pass as `display` to screenshot.
+    pub index: usize,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub name: String,
+    pub online: bool,
+    pub scale: f64,
+    /// The display the remote is currently capturing.
+    pub is_current: bool,
+}
+
+#[derive(Debug, Serialize)]
 pub struct PeerDto {
     pub id: String,
     pub alias: String,
@@ -137,4 +152,39 @@ pub struct ClipboardReq {
     pub action: String, // get | set
     #[serde(default)]
     pub text: String,
+}
+
+/// For routes whose only input is which machine to act on.
+#[derive(Debug, Deserialize)]
+pub struct PeerReq {
+    pub peer: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProcessListReq {
+    pub peer: String,
+    #[serde(default)]
+    pub filter: Option<String>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct KillReq {
+    pub peer: String,
+    pub pid: u32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServiceListReq {
+    pub peer: String,
+    #[serde(default)]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServiceReq {
+    pub peer: String,
+    pub name: String,
+    pub action: String, // start | stop | restart
 }

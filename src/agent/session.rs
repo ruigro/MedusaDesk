@@ -102,7 +102,13 @@ impl AgentSession {
                 let state = rx.borrow_and_update().clone();
                 match state {
                     ConnState::Ready => return Ok(()),
-                    ConnState::Error(e) => bail!(e),
+                    ConnState::Error(e) => {
+                        let hint = super::system::explain_login_error(&e);
+                        match hint {
+                            Some(hint) => bail!("{e}. {hint}"),
+                            None => bail!(e),
+                        }
+                    }
                     ConnState::Connecting => {}
                 }
                 if rx.changed().await.is_err() {
@@ -158,14 +164,33 @@ impl AgentSession {
         self.inner.lc.read().unwrap().version
     }
 
-    pub fn displays(&self) -> usize {
-        self.st
-            .peer_info
-            .read()
-            .unwrap()
-            .as_ref()
-            .map(|pi| pi.displays.len())
-            .unwrap_or(0)
+    /// The remote's OS, for choosing platform-specific system commands.
+    pub fn os(&self) -> super::system::Platform {
+        super::system::Platform::of(&self.platform())
+    }
+
+    /// The remote's displays, so an agent can pick a `display` index for
+    /// screenshots instead of guessing that one exists.
+    pub fn display_list(&self) -> Vec<super::proto::DisplayDto> {
+        let info = self.st.peer_info.read().unwrap();
+        let Some(pi) = info.as_ref() else {
+            return Vec::new();
+        };
+        pi.displays
+            .iter()
+            .enumerate()
+            .map(|(index, d)| super::proto::DisplayDto {
+                index,
+                x: d.x,
+                y: d.y,
+                width: d.width,
+                height: d.height,
+                name: d.name.clone(),
+                online: d.online,
+                scale: d.scale,
+                is_current: index as i32 == pi.current_display,
+            })
+            .collect()
     }
 
     pub async fn screenshot(&self, display: i32) -> ResultType<Bytes> {
@@ -290,12 +315,31 @@ impl AgentSession {
         self.inner.send(Data::Message(msg));
     }
 
-    /// Reads the local clipboard. With clipboard sync enabled, content copied
-    /// on the remote side lands here; this is best-effort by protocol design.
-    pub fn clipboard_get(&self) -> ResultType<String> {
-        self.touch();
-        let mut cb = arboard::Clipboard::new()?;
-        Ok(cb.get_text()?)
+    /// Read the *remote* clipboard.
+    ///
+    /// The protocol has no "send me your clipboard" request — a peer only
+    /// pushes its clipboard when it changes — so this asks the remote's own
+    /// clipboard tool, which means it needs a terminal session, not a control
+    /// one. Reading the local clipboard here instead would return whatever the
+    /// operator last copied on their own machine.
+    pub async fn clipboard_get(&self, run_timeout: Duration) -> ResultType<String> {
+        let res = self
+            .exec(&super::system::read_clipboard(self.os()), run_timeout)
+            .await?;
+        if res.timed_out {
+            bail!("Timed out reading the remote clipboard");
+        }
+        if res.exit_code.unwrap_or(0) != 0 && res.stdout.trim().is_empty() {
+            match self.os() {
+                super::system::Platform::Linux => bail!(
+                    "Could not read the remote clipboard: none of wl-paste, xclip or xsel are \
+                     installed on {}",
+                    self.peer
+                ),
+                _ => bail!("Could not read the remote clipboard on {}", self.peer),
+            }
+        }
+        Ok(res.stdout)
     }
 
     pub(crate) fn register_terminal(&self) -> (i32, mpsc::UnboundedReceiver<TermEvent>) {

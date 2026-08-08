@@ -24,6 +24,17 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(20);
 const QUIET_WINDOW: Duration = Duration::from_millis(500);
 const MAX_BANNER_WAIT: Duration = Duration::from_secs(4);
 
+const TERM_ROWS: u32 = 40;
+/// Wide enough that the shell's echo of the command stays on one line.
+///
+/// The PTY breaks the echo at the terminal width, and [`scrub`] removes it by
+/// matching the whole command against a single line — so a command wider than
+/// this comes back to the caller as if it were program output. The longest
+/// command `system` builds is 370 characters, and `system::MAX_COMMAND_LEN`
+/// keeps it that way; the rest is headroom for the shell's prompt.
+const TERM_COLS: u32 = 512;
+const _: () = assert!(super::system::MAX_COMMAND_LEN < TERM_COLS as usize);
+
 #[derive(Debug, Serialize)]
 pub struct ExecResult {
     pub stdout: String,
@@ -50,7 +61,7 @@ async fn exec_inner(
     cmd: &str,
     run_timeout: Duration,
 ) -> ResultType<ExecResult> {
-    sess.open_terminal(tid, 40, 200);
+    sess.open_terminal(tid, TERM_ROWS, TERM_COLS);
 
     // Wait for the open ack.
     let open_deadline = Instant::now() + OPEN_TIMEOUT;

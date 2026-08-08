@@ -11,10 +11,13 @@ use serde_json::json;
 
 use super::proto;
 use super::session::{AgentSession, Auth};
+use super::system::{self, ServiceAction};
 use super::SessionPool;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(45);
 const DEFAULT_EXEC_TIMEOUT_SECS: u64 = 60;
+/// System tools are short-running; a hung one should not hold the CLI open.
+const SYSTEM_TIMEOUT: Duration = Duration::from_secs(60);
 const DEFAULT_TRANSFER_TIMEOUT_SECS: u64 = 3600;
 pub const DEFAULT_HTTP_PORT: u16 = 21120;
 const POOL_IDLE: Duration = Duration::from_secs(300);
@@ -93,6 +96,9 @@ fn build_command() -> Command {
         .subcommand_required(true)
         .arg_required_else_help(true)
         .subcommand(Command::new("peers").about("List saved peers as JSON"))
+        .subcommand(peer_args(
+            Command::new("displays").about("List the remote's displays as JSON"),
+        ))
         .subcommand(
             peer_args(Command::new("screenshot").about("Capture the remote screen as PNG"))
                 .arg(Arg::new("display").long("display").default_value("0"))
@@ -174,8 +180,41 @@ fn build_command() -> Command {
                 .arg(Arg::new("text").required(true)),
         )
         .subcommand(peer_args(Command::new("clipboard-get").about(
-            "Read clipboard text (local side, synced from the remote when clipboard sync is on)",
+            "Read the remote's clipboard text (needs terminal permission on the remote)",
         )))
+        .subcommand(peer_args(
+            Command::new("sysinfo").about("Show the remote's OS, uptime and free memory/disk"),
+        ))
+        .subcommand(
+            peer_args(Command::new("ps").about("List remote processes, largest by memory first"))
+                .arg(
+                    Arg::new("filter")
+                        .long("filter")
+                        .help("Only processes whose name contains this"),
+                )
+                .arg(
+                    Arg::new("limit")
+                        .long("limit")
+                        .help("Rows to return, 1-500 (default 50)"),
+                ),
+        )
+        .subcommand(
+            peer_args(Command::new("kill").about("Force-terminate a remote process by PID"))
+                .arg(Arg::new("pid").required(true)),
+        )
+        .subcommand(
+            peer_args(Command::new("services").about("List remote services"))
+                .arg(Arg::new("limit").long("limit").help("Rows to return, 1-500")),
+        )
+        .subcommand(
+            peer_args(Command::new("service").about("Start, stop or restart a remote service"))
+                .arg(Arg::new("name").required(true))
+                .arg(
+                    Arg::new("action")
+                        .required(true)
+                        .value_parser(["start", "stop", "restart"]),
+                ),
+        )
         .subcommand(auth_only_args(Command::new("mcp").about(
             "Run a Model Context Protocol server on stdio (for Claude Code, Cursor, ...)",
         )))
@@ -205,6 +244,12 @@ fn parse_i32(matches: &ArgMatches, name: &str) -> i32 {
         .unwrap_or_default()
 }
 
+fn parse_usize(matches: &ArgMatches, name: &str) -> Option<usize> {
+    matches
+        .get_one::<String>(name)
+        .and_then(|v| v.parse::<usize>().ok())
+}
+
 fn fail(e: impl std::fmt::Display) -> i32 {
     eprintln!("{}", json!({ "error": e.to_string() }));
     1
@@ -225,12 +270,52 @@ async fn connect(matches: &ArgMatches, conn_type: ConnType) -> ResultType<AgentS
     AgentSession::connect(&peer, auth_from(matches), conn_type, CONNECT_TIMEOUT).await
 }
 
+/// Run one of the typed system tools on the remote. The command depends on the
+/// remote's OS, which is only known once the session is up.
+async fn system_verb(
+    matches: &ArgMatches,
+    build: impl FnOnce(system::Platform) -> Result<String, String>,
+) -> i32 {
+    let sess = match connect(matches, ConnType::TERMINAL).await {
+        Ok(s) => s,
+        Err(e) => return fail(e),
+    };
+    let command = match build(sess.os()) {
+        Ok(c) => c,
+        Err(e) => {
+            sess.close().await;
+            return fail(e);
+        }
+    };
+    let res = sess.exec(&command, SYSTEM_TIMEOUT).await;
+    sess.close().await;
+    match res {
+        Ok(r) => match serde_json::to_value(&r) {
+            Ok(v) => ok(v),
+            Err(e) => fail(e),
+        },
+        Err(e) => fail(e),
+    }
+}
+
 async fn dispatch(matches: ArgMatches) -> i32 {
     match matches.subcommand() {
         Some(("peers", _)) => match serde_json::to_value(proto::list_peers()) {
             Ok(v) => ok(v),
             Err(e) => fail(e),
         },
+        Some(("displays", m)) => {
+            let sess = match connect(m, ConnType::DEFAULT_CONN).await {
+                Ok(s) => s,
+                Err(e) => return fail(e),
+            };
+            let displays = sess.display_list();
+            sess.close().await;
+            match serde_json::to_value(displays) {
+                Ok(v) => ok(v),
+                Err(e) => fail(e),
+            }
+        }
         Some(("screenshot", m)) => {
             let sess = match connect(m, ConnType::DEFAULT_CONN).await {
                 Ok(s) => s,
@@ -384,18 +469,45 @@ async fn dispatch(matches: ArgMatches) -> i32 {
             ok(json!({ "ok": true }))
         }
         Some(("clipboard-get", m)) => {
-            let sess = match connect(m, ConnType::DEFAULT_CONN).await {
+            // Reads the remote's clipboard over the terminal channel; see
+            // `AgentSession::clipboard_get`.
+            let sess = match connect(m, ConnType::TERMINAL).await {
                 Ok(s) => s,
                 Err(e) => return fail(e),
             };
-            // Give clipboard sync a moment after connecting.
-            tokio::time::sleep(Duration::from_millis(500)).await;
-            let res = sess.clipboard_get();
+            let res = sess.clipboard_get(SYSTEM_TIMEOUT).await;
             sess.close().await;
             match res {
                 Ok(text) => ok(json!({ "text": text })),
                 Err(e) => fail(e),
             }
+        }
+        Some(("sysinfo", m)) => system_verb(m, |os| Ok(system::system_info(os))).await,
+        Some(("ps", m)) => {
+            let filter = m.get_one::<String>("filter").cloned();
+            let limit = parse_usize(m, "limit");
+            system_verb(m, |os| system::list_processes(os, filter.as_deref(), limit)).await
+        }
+        Some(("kill", m)) => {
+            let pid = match m.get_one::<String>("pid").and_then(|v| v.parse::<u32>().ok()) {
+                Some(pid) => pid,
+                None => return fail("PID must be a positive number"),
+            };
+            system_verb(m, |os| Ok(system::kill_process(os, pid))).await
+        }
+        Some(("services", m)) => {
+            let limit = parse_usize(m, "limit");
+            system_verb(m, |os| Ok(system::list_services(os, limit))).await
+        }
+        Some(("service", m)) => {
+            let name = m.get_one::<String>("name").cloned().unwrap_or_default();
+            let action = match ServiceAction::parse(
+                m.get_one::<String>("action").map(|s| s.as_str()).unwrap_or(""),
+            ) {
+                Ok(a) => a,
+                Err(e) => return fail(e),
+            };
+            system_verb(m, |os| system::service_control(os, &name, action)).await
         }
         Some(("mcp", m)) => {
             let pool = SessionPool::new(auth_from(m), POOL_IDLE);
@@ -411,10 +523,20 @@ async fn dispatch(matches: ArgMatches) -> i32 {
                 .and_then(|v| v.parse::<u16>().ok())
                 .or_else(|| Config::get_option("agent-http-port").parse::<u16>().ok())
                 .unwrap_or(DEFAULT_HTTP_PORT);
+            let token = super::http_token();
             let pool = SessionPool::new(auth_from(m), POOL_IDLE);
             crate::common::test_rendezvous_server();
             crate::common::test_nat_type();
-            match super::http::serve(pool.clone(), port).await {
+            // Callers cannot reach the gateway without the token, so print it
+            // where whoever started the server will see it.
+            println!(
+                "{}",
+                json!({
+                    "listening": format!("http://127.0.0.1:{port}"),
+                    "token": token.clone(),
+                })
+            );
+            match super::http::serve(pool.clone(), port, token).await {
                 Ok(()) => 0,
                 Err(e) => {
                     pool.close_all().await;
