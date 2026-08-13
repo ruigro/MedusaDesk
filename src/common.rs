@@ -1046,24 +1046,60 @@ fn medusa_release_version_number(tag: &str) -> i64 {
     get_version_number(clean)
 }
 
-fn is_usable_medusa_update_asset(name: &str) -> bool {
+// Kept free of `cfg(target_os)` so the selection rules stay unit-testable on
+// every host the test suite runs on, not only on the platform they describe.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn is_windows_update_asset(name: &str) -> bool {
     let lower = name.to_lowercase();
+    (lower.contains("x64") || lower.contains("x86_64"))
+        && (lower.ends_with(".msi") || lower.ends_with(".exe"))
+}
+
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn is_macos_update_asset(name: &str, aarch64: bool) -> bool {
+    let lower = name.to_lowercase();
+    let is_arch = if aarch64 {
+        lower.contains("aarch64") || lower.contains("arm64")
+    } else {
+        lower.contains("x86_64") || lower.contains("intel")
+    };
+    lower.contains("macos") && lower.ends_with(".dmg") && is_arch
+}
+
+/// Picks the Windows update asset matching how this client was installed.
+///
+/// The preference is strict on purpose: an MSI install must be updated by an
+/// `.msi` and an EXE install by an `.exe`. The EXE installer writes its own
+/// uninstall registry entries (see `get_reg_cmd` in `platform::windows`, which
+/// keys them off `is_msi_installed`), so updating across installer kinds leaves
+/// two uninstall records for one install.
+///
+/// `None` therefore means "this release strands this install kind" rather than
+/// "no update exists", which is why the caller logs it.
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+fn pick_windows_update_asset<'a>(
+    names: impl IntoIterator<Item = &'a str>,
+    prefer_msi: bool,
+) -> Option<String> {
+    let wanted = if prefer_msi { ".msi" } else { ".exe" };
+    names
+        .into_iter()
+        .find(|name| is_windows_update_asset(name) && name.to_lowercase().ends_with(wanted))
+        .map(ToOwned::to_owned)
+}
+
+fn is_usable_medusa_update_asset(name: &str) -> bool {
     #[cfg(target_os = "windows")]
     {
-        (lower.contains("x64") || lower.contains("x86_64"))
-            && (lower.ends_with(".msi") || lower.ends_with(".exe"))
+        is_windows_update_asset(name)
     }
     #[cfg(target_os = "macos")]
     {
-        let is_arch = if cfg!(target_arch = "aarch64") {
-            lower.contains("aarch64") || lower.contains("arm64")
-        } else {
-            lower.contains("x86_64") || lower.contains("intel")
-        };
-        lower.contains("macos") && lower.ends_with(".dmg") && is_arch
+        is_macos_update_asset(name, cfg!(target_arch = "aarch64"))
     }
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     {
+        let _ = name;
         false
     }
 }
@@ -1071,19 +1107,10 @@ fn is_usable_medusa_update_asset(name: &str) -> bool {
 fn pick_medusa_update_asset(release: &GithubRelease) -> Option<String> {
     #[cfg(target_os = "windows")]
     {
-        let preferred_ext = if crate::platform::is_msi_installed().unwrap_or(false) {
-            ".msi"
-        } else {
-            ".exe"
-        };
-        return release
-            .assets
-            .iter()
-            .map(|asset| asset.name.as_str())
-            .find(|name| {
-                is_usable_medusa_update_asset(name) && name.to_lowercase().ends_with(preferred_ext)
-            })
-            .map(ToOwned::to_owned);
+        return pick_windows_update_asset(
+            release.assets.iter().map(|asset| asset.name.as_str()),
+            crate::platform::is_msi_installed().unwrap_or(false),
+        );
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -1110,9 +1137,26 @@ async fn do_check_medusadesk_software_update() -> hbb_common::ResultType<()> {
     let releases: Vec<GithubRelease> = releases_response.json().await?;
     let current_version = medusa_release_version_number(MEDUSADESK_RELEASE_TAG);
     let latest = releases.into_iter().find(|release| {
-        !release.draft
-            && medusa_release_version_number(&release.tag_name) > current_version
-            && pick_medusa_update_asset(release).is_some()
+        if release.draft || medusa_release_version_number(&release.tag_name) <= current_version {
+            return false;
+        }
+        if pick_medusa_update_asset(release).is_some() {
+            return true;
+        }
+        // A newer release exists but carries nothing this client can install.
+        // Without this the client reports "up to date" forever, which is how an
+        // MSI install silently stops updating when a release ships only an .exe.
+        log::warn!(
+            "MedusaDesk {} skipped: no update asset for this platform/install kind. Assets: [{}]",
+            release.tag_name,
+            release
+                .assets
+                .iter()
+                .map(|asset| asset.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        false
     });
 
     if let Some(release) = latest {
@@ -2780,6 +2824,85 @@ mod tests {
         time::{interval, interval_at, sleep, Duration, Instant, Interval},
     };
     use std::collections::HashSet;
+
+    // Assets exactly as published on github.com/ruigro/MedusaDesk.
+    const V0_1_4_ASSETS: &[&str] = &["MedusaDesk-windows-x64-update-now.exe"];
+    const V0_1_2_ASSETS: &[&str] = &[
+        "MedusaDesk-windows-x64-portable.zip",
+        "MedusaDesk-windows-x64.exe",
+    ];
+
+    #[test]
+    fn exe_install_updates_from_published_release() {
+        assert_eq!(
+            pick_windows_update_asset(V0_1_4_ASSETS.iter().copied(), false),
+            Some("MedusaDesk-windows-x64-update-now.exe".to_owned())
+        );
+    }
+
+    #[test]
+    fn msi_install_is_stranded_by_an_exe_only_release() {
+        // v0.1.4 ships no .msi, so an MSI install has nothing safe to install.
+        // Updating it with the .exe would leave two uninstall records, so the
+        // picker declines and `do_check_medusadesk_software_update` logs why.
+        assert_eq!(
+            pick_windows_update_asset(V0_1_4_ASSETS.iter().copied(), true),
+            None
+        );
+    }
+
+    #[test]
+    fn each_install_kind_picks_its_own_installer() {
+        let assets = [
+            "MedusaDesk-windows-x64-portable.zip",
+            "MedusaDesk-windows-x64.exe",
+            "MedusaDesk-windows-x64.msi",
+        ];
+        assert_eq!(
+            pick_windows_update_asset(assets.iter().copied(), true),
+            Some("MedusaDesk-windows-x64.msi".to_owned())
+        );
+        assert_eq!(
+            pick_windows_update_asset(assets.iter().copied(), false),
+            Some("MedusaDesk-windows-x64.exe".to_owned())
+        );
+    }
+
+    #[test]
+    fn portable_zip_is_never_offered_as_an_update() {
+        assert!(!is_windows_update_asset("MedusaDesk-windows-x64-portable.zip"));
+        assert_eq!(
+            pick_windows_update_asset(
+                V0_1_2_ASSETS.iter().copied().filter(|n| n.ends_with(".zip")),
+                false
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn macos_assets_are_matched_per_architecture() {
+        let arm = "MedusaDesk-macos-aarch64.dmg";
+        let intel = "MedusaDesk-macos-x86_64.dmg";
+        assert!(is_macos_update_asset(arm, true));
+        assert!(!is_macos_update_asset(arm, false));
+        assert!(is_macos_update_asset(intel, false));
+        assert!(!is_macos_update_asset(intel, true));
+        // A Windows asset must never satisfy a macOS client.
+        assert!(!is_macos_update_asset("MedusaDesk-windows-x64.exe", true));
+    }
+
+    #[test]
+    fn prerelease_tags_compare_by_numeric_version() {
+        assert!(
+            medusa_release_version_number("v0.1.5-local")
+                > medusa_release_version_number("v0.1.4")
+        );
+        assert_eq!(
+            medusa_release_version_number("v0.1.4"),
+            medusa_release_version_number("0.1.4")
+        );
+    }
 
     #[inline]
     fn get_timestamp_secs() -> u128 {

@@ -414,6 +414,14 @@ def build_flutter_dmg(version, features):
     os.chdir('flutter')
     system2('flutter build macos --release')
     system2(f'cp -rf ../target/release/service "{mac_app_path}/Contents/MacOS/"')
+    # Adding `service` after Xcode signed the bundle invalidates the signature
+    # seal. dyld then refuses to map the bundled frameworks ("different Team
+    # IDs") and the app cannot start at all, so re-seal it here. When a
+    # Developer ID is configured, signing with it replaces this signature.
+    identity = os.environ.get('MACOS_CODESIGN_IDENTITY', '-')
+    system2(f'codesign --force --deep --sign "{identity}" "{mac_app_path}"')
+    # An unverified signature is not evidence that the bundle will launch.
+    system2(f'codesign --verify --deep --strict "{mac_app_path}"')
     '''
     system2(
         "create-dmg --volname \"RustDesk Installer\" --window-pos 200 120 --window-size 800 400 --icon-size 100 --app-drop-link 600 185 --icon RustDesk.app 200 190 --hide-extension RustDesk.app rustdesk.dmg ./build/macos/Build/Products/Release/RustDesk.app")
@@ -486,6 +494,21 @@ def sign_windows_files(files):
     system2(f'""{signtool}" verify /pa /all {targets}"')
 
 
+def flutter_windows_app_exe():
+    '''Path to the built app executable.
+
+    Flutter names it after the CMake project, so a branded build produces
+    `medusadesk.exe` while upstream produces `rustdesk.exe`. Signing a
+    hard-coded name silently skips the real binary, because `sign_windows_files`
+    drops paths that do not exist.
+    '''
+    for name in ('rustdesk.exe', 'medusadesk.exe'):
+        candidate = f'{flutter_build_dir_2}/{name}'
+        if os.path.exists(candidate):
+            return candidate
+    return f'{flutter_build_dir_2}/rustdesk.exe'
+
+
 def build_flutter_windows(version, features, skip_portable_pack):
     if not skip_cargo:
         system2(f'cargo build --locked --features {features} --lib --release')
@@ -499,7 +522,8 @@ def build_flutter_windows(version, features, skip_portable_pack):
                  flutter_build_dir_2)
     # Sign the bundle before packing, so the portable exe carries signed
     # payloads as well as its own signature.
-    sign_windows_files([f'{flutter_build_dir_2}/rustdesk.exe',
+    app_exe = flutter_windows_app_exe()
+    sign_windows_files([app_exe,
                         f'{flutter_build_dir_2}/librustdesk.dll',
                         f'{flutter_build_dir_2}/dylib_virtual_display.dll'])
     if skip_portable_pack:
@@ -507,7 +531,7 @@ def build_flutter_windows(version, features, skip_portable_pack):
     os.chdir('libs/portable')
     system2('pip3 install -r requirements.txt')
     system2(
-        f'python3 ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{flutter_build_dir_2}/rustdesk.exe')
+        f'python3 ./generate.py -f ../../{flutter_build_dir_2} -o . -e ../../{app_exe}')
     os.chdir('../..')
     if os.path.exists('./rustdesk_portable.exe'):
         os.replace('./target/release/rustdesk-portable-packer.exe',
