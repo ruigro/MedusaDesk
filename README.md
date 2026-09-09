@@ -27,6 +27,24 @@ Medusa Desk is a remote desktop solution, written in Rust and branded for Far Is
 
 Works out of the box with no configuration required. For production use, configure your own rendezvous/relay server infrastructure so the branded client is not tied to upstream public defaults.
 
+## ✨ Recent highlights
+
+- **v0.1.6:** Built-in AI Agent Gateway for headless remote control, signed Windows installers, automatic update checks, and reliable clean Linux builds.
+
+<details>
+<summary>Release changelog</summary>
+
+| Version | Highlights |
+| --- | --- |
+| v0.1.6 | AI Agent Gateway, signed Windows packages, update checks, and clean-build dependency discovery |
+| v0.1.5 | Release signing and latest-download verification gates |
+| v0.1.4 | Versioned download-page fallback |
+| v0.1.3 | Automatic update checks and selectable skins |
+| v0.1.2 | Medusa Desk visual identity and Windows release workflow |
+| v0.1.1 | Medusa Desk Windows executable packaging |
+
+</details>
+
 ![image](https://user-images.githubusercontent.com/71636191/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
 
 Medusa Desk welcomes contribution from everyone. See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for help getting started.

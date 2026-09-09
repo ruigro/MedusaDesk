@@ -4,9 +4,10 @@ use std::{
     println,
 };
 
-mod build_vcpkg;
+#[path = "../vcpkg_root.rs"]
+mod vcpkg_root;
 
-use build_vcpkg::resolve_vcpkg_root;
+use vcpkg_root::resolve_vcpkg_root;
 
 #[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
 fn link_pkg_config(name: &str) -> Vec<PathBuf> {
@@ -129,18 +130,34 @@ fn link_homebrew_m1(name: &str) -> PathBuf {
 fn find_package(name: &str) -> Vec<PathBuf> {
     let no_pkg_config_var_name = format!("NO_PKG_CONFIG_{name}");
     println!("cargo:rerun-if-env-changed={no_pkg_config_var_name}");
-    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
-    println!("cargo:rerun-if-env-changed=HOME");
+    const VCPKG_ENV_VARS: [&str; 6] = [
+        "VCPKG_ROOT",
+        "HOME",
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+        "CARGO",
+        "RUSTC",
+    ];
+    for variable in VCPKG_ENV_VARS {
+        println!("cargo:rerun-if-env-changed={variable}");
+    }
     if cfg!(all(target_os = "linux", feature = "linux-pkg-config"))
         && std::env::var(no_pkg_config_var_name).as_deref() != Ok("1")
     {
         link_pkg_config(name)
     } else if let Some(vcpkg_root) = resolve_vcpkg_root(
         std::env::var_os("VCPKG_ROOT"),
-        std::env::var_os("HOME"),
         std::env::var("CARGO_CFG_TARGET_OS")
             .as_deref()
             .unwrap_or_default(),
+        &[
+            std::env::var_os("HOME"),
+            std::env::var_os("CARGO_HOME"),
+            std::env::var_os("RUSTUP_HOME"),
+            std::env::var_os("CARGO"),
+            std::env::var_os("RUSTC"),
+            std::env::var_os("CARGO_MANIFEST_DIR"),
+        ],
     ) {
         vec![link_vcpkg(vcpkg_root, name)]
     } else {
