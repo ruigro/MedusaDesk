@@ -110,6 +110,9 @@ jobs:
       with:
         submodules: recursive
 
+    - name: Validate release signing gate
+      run: tests/test_release_signing_gate.sh
+
     - name: Install prerequisites
       shell: bash
       run: |
