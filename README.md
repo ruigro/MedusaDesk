@@ -29,14 +29,15 @@ Works out of the box with no configuration required. For production use, configu
 
 ## ✨ Recent highlights
 
-- **v0.1.6:** Built-in AI Agent Gateway for headless remote control, signed Windows installers, automatic update checks, and reliable clean Linux builds.
+- **v0.1.7:** Built-in AI Agent Gateway for headless remote control, signed Windows installers, automatic update checks, reliable clean Linux builds, and working public release publication.
 
 <details>
 <summary>Release changelog</summary>
 
 | Version | Highlights |
 | --- | --- |
-| v0.1.6 | AI Agent Gateway, signed Windows packages, update checks, and clean-build dependency discovery |
+| v0.1.7 | AI Agent Gateway, signed Windows packages, update checks, clean-build dependency discovery, and public release permissions |
+| v0.1.6 | Clean-build native dependency discovery |
 | v0.1.5 | Release signing and latest-download verification gates |
 | v0.1.4 | Versioned download-page fallback |
 | v0.1.3 | Automatic update checks and selectable skins |
