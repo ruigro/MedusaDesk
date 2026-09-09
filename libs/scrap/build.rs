@@ -4,6 +4,10 @@ use std::{
     println,
 };
 
+mod build_vcpkg;
+
+use build_vcpkg::resolve_vcpkg_root;
+
 #[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
 fn link_pkg_config(name: &str) -> Vec<PathBuf> {
     // sometimes an override is needed
@@ -125,12 +129,20 @@ fn link_homebrew_m1(name: &str) -> PathBuf {
 fn find_package(name: &str) -> Vec<PathBuf> {
     let no_pkg_config_var_name = format!("NO_PKG_CONFIG_{name}");
     println!("cargo:rerun-if-env-changed={no_pkg_config_var_name}");
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
+    println!("cargo:rerun-if-env-changed=HOME");
     if cfg!(all(target_os = "linux", feature = "linux-pkg-config"))
         && std::env::var(no_pkg_config_var_name).as_deref() != Ok("1")
     {
         link_pkg_config(name)
-    } else if let Ok(vcpkg_root) = std::env::var("VCPKG_ROOT") {
-        vec![link_vcpkg(vcpkg_root.into(), name)]
+    } else if let Some(vcpkg_root) = resolve_vcpkg_root(
+        std::env::var_os("VCPKG_ROOT"),
+        std::env::var_os("HOME"),
+        std::env::var("CARGO_CFG_TARGET_OS")
+            .as_deref()
+            .unwrap_or_default(),
+    ) {
+        vec![link_vcpkg(vcpkg_root, name)]
     } else {
         // Try using homebrew
         vec![link_homebrew_m1(name)]

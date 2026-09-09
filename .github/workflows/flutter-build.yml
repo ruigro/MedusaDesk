@@ -67,7 +67,22 @@ env:
   SIGN_BASE_URL: "${{ secrets.SIGN_BASE_URL }}-2"
 
 jobs:
+  validate-build-configuration:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+
+      - name: Validate vcpkg discovery
+        run: bash tests/test_vcpkg_resolution.sh
+
+      - name: Validate latest release publishing
+        run: bash tests/test_latest_release_gate.sh
+
   generate-bridge:
+    needs: [validate-build-configuration]
     uses: ./.github/workflows/bridge.yml
 
   build-RustDeskTempTopMostWindow:
@@ -327,7 +342,7 @@ jobs:
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./SignOutput/MedusaDesk-windows-x64.msi
@@ -481,7 +496,7 @@ jobs:
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         if: env.UPLOAD_ARTIFACT == 'true'
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./SignOutput/rustdesk-*.exe
@@ -820,7 +835,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             rustdesk*-${{ matrix.job.arch }}.dmg
@@ -864,7 +879,7 @@ jobs:
       - name: Publish unsigned app
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: rustdesk-${{ env.VERSION }}-unsigned.tar.gz
 
@@ -1147,7 +1162,7 @@ jobs:
         if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
@@ -1156,7 +1171,7 @@ jobs:
         if: env.ANDROID_SIGNING_KEY == null && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             signed-apk/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}.apk
@@ -1331,7 +1346,7 @@ jobs:
         if: env.ANDROID_SIGNING_KEY != null && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ${{steps.sign-rustdesk.outputs.signedReleaseFile}}
@@ -1340,7 +1355,7 @@ jobs:
         if: env.ANDROID_SIGNING_KEY == null && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             signed-apk/rustdesk-${{ env.VERSION }}-universal${{ env.suffix }}.apk
@@ -1642,7 +1657,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             rustdesk-*.deb
@@ -1678,7 +1693,7 @@ jobs:
         if: matrix.job.arch == 'x86_64' && env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             res/rustdesk-${{ env.VERSION }}*.zst
@@ -1898,7 +1913,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}-sciter.deb
@@ -1955,7 +1970,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             ./appimage/rustdesk-${{ env.VERSION }}-*.AppImage
@@ -2040,7 +2055,7 @@ jobs:
       - name: Publish flatpak package
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             flatpak/rustdesk-${{ env.VERSION }}-${{ matrix.job.arch }}${{ matrix.job.suffix }}.flatpak
@@ -2113,7 +2128,7 @@ jobs:
         if: env.UPLOAD_ARTIFACT == 'true'
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
-          prerelease: true
+          prerelease: ${{ inputs.upload-tag == 'nightly' }}
           tag_name: ${{ env.TAG_NAME }}
           files: |
             flutter/build/rustdesk-${{ env.VERSION }}-${{ env.RELEASE_NAME }}.tar.gz

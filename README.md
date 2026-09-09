@@ -15,7 +15,7 @@
 <p align="center">
   The download page detects Windows, macOS, or Linux and recommends the right build.
   Direct release downloads are also available at
-  <a href="https://github.com/ruigro/MedusaDesk/releases/tag/v0.1.0-test">v0.1.0-test</a>.
+  <a href="https://github.com/ruigro/MedusaDesk/releases/latest">the latest GitHub release</a>.
 </p>
 
 > [!Caution]
@@ -192,4 +192,3 @@ Please ensure that you run these commands from the root of the RustDesk reposito
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
-

@@ -113,6 +113,12 @@ jobs:
     - name: Validate release signing gate
       run: bash tests/test_release_signing_gate.sh
 
+    - name: Validate latest release gate
+      run: bash tests/test_latest_release_gate.sh
+
+    - name: Validate vcpkg discovery
+      run: bash tests/test_vcpkg_resolution.sh
+
     - name: Install prerequisites
       shell: bash
       run: |

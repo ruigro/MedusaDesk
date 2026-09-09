@@ -1,5 +1,5 @@
 const fallbackRepo = "ruigro/MedusaDesk";
-const releaseTag = "v0.1.4";
+const fallbackReleaseTag = "v0.1.4";
 
 function inferRepo() {
   if (window.MEDUSA_RELEASE_REPO) {
@@ -122,7 +122,7 @@ function renderRelease(repo, release) {
   const downloadList = document.getElementById("download-list");
   const platform = detectPlatform();
 
-  const tag = release.tag_name || release.name || releaseTag;
+  const tag = release.tag_name || release.name || fallbackReleaseTag;
   releaseTitle.textContent = release.name || tag;
   releaseDate.textContent = `Detected ${platform.label}. Published ${formatDate(release.published_at)} from ${repo}`;
   allReleases.href = `https://github.com/${repo}/releases`;
@@ -168,7 +168,7 @@ function renderRelease(repo, release) {
 }
 
 function renderError(repo) {
-  const releaseUrl = `https://github.com/${repo}/releases/tag/${releaseTag}`;
+  const releaseUrl = `https://github.com/${repo}/releases/tag/${fallbackReleaseTag}`;
   document.getElementById("release-title").textContent = "Download Medusa Desk";
   document.getElementById("release-date").textContent =
     `Release data could not be loaded. Open the GitHub release directly.`;
@@ -184,7 +184,7 @@ function renderError(repo) {
 async function loadRelease() {
   const repo = inferRepo();
   try {
-    const response = await fetch(`https://api.github.com/repos/${repo}/releases/tags/${releaseTag}`, {
+    const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
       headers: { Accept: "application/vnd.github+json" },
     });
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
