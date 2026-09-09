@@ -15,7 +15,7 @@
 <p align="center">
   The download page detects Windows, macOS, or Linux and recommends the right build.
   Direct release downloads are also available at
-  <a href="https://github.com/ruigro/MedusaDesk/releases/tag/v0.1.0-test">v0.1.0-test</a>.
+  <a href="https://github.com/ruigro/MedusaDesk/releases/latest">the latest GitHub release</a>.
 </p>
 
 > [!Caution]
@@ -26,6 +26,25 @@
 Medusa Desk is a remote desktop solution, written in Rust and branded for Far Island Corporation. This fork is based on RustDesk and remains licensed under the GNU Affero General Public License v3.0.
 
 Works out of the box with no configuration required. For production use, configure your own rendezvous/relay server infrastructure so the branded client is not tied to upstream public defaults.
+
+## ✨ Recent highlights
+
+- **v0.1.7:** Built-in AI Agent Gateway for headless remote control, signed Windows installers, automatic update checks, reliable clean Linux builds, and working public release publication.
+
+<details>
+<summary>Release changelog</summary>
+
+| Version | Highlights |
+| --- | --- |
+| v0.1.7 | AI Agent Gateway, signed Windows packages, update checks, clean-build dependency discovery, and public release permissions |
+| v0.1.6 | Clean-build native dependency discovery |
+| v0.1.5 | Release signing and latest-download verification gates |
+| v0.1.4 | Versioned download-page fallback |
+| v0.1.3 | Automatic update checks and selectable skins |
+| v0.1.2 | Medusa Desk visual identity and Windows release workflow |
+| v0.1.1 | Medusa Desk Windows executable packaging |
+
+</details>
 
 ![image](https://user-images.githubusercontent.com/71636191/171661982-430285f0-2e12-4b1d-9957-4a58e375304d.png)
 
@@ -192,4 +211,3 @@ Please ensure that you run these commands from the root of the RustDesk reposito
 ![File Transfer](https://github.com/rustdesk/rustdesk/assets/28412477/39511ad3-aa9a-4f8c-8947-1cce286a46ad)
 
 ![TCP Tunneling](https://github.com/rustdesk/rustdesk/assets/28412477/78e8708f-e87e-4570-8373-1360033ea6c5)
-
