@@ -29,14 +29,14 @@ Works out of the box with no configuration required. For production use, configu
 
 ## ✨ Recent highlights
 
-- **v0.1.8:** Built-in AI Agent Gateway for headless remote control, signed Windows installers, automatic update checks, and reliable clean builds without machine-specific native dependency paths.
+- **v0.1.8:** Built-in AI Agent Gateway for headless remote control, a signed Windows installer, Linux x86_64 and ARMv7 `.deb` packages, automatic update checks, and reliable clean builds without machine-specific native dependency paths.
 
 <details>
 <summary>Release changelog</summary>
 
 | Version | Highlights |
 | --- | --- |
-| v0.1.8 | AI Agent Gateway, signed Windows packages, update checks, and portable clean-build dependency handling |
+| v0.1.8 | AI Agent Gateway, signed Windows installer, Linux x86_64/ARMv7 `.deb` packages, update checks, and portable clean-build dependency handling |
 | v0.1.7 | AI Agent Gateway, signed Windows packages, update checks, clean-build dependency discovery, and public release permissions |
 | v0.1.6 | Clean-build native dependency discovery |
 | v0.1.5 | Release signing and latest-download verification gates |

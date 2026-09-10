@@ -81,6 +81,9 @@ jobs:
       - name: Validate latest release publishing
         run: bash tests/test_latest_release_gate.sh
 
+      - name: Validate release download selection
+        run: node tests/test_release_download_selector.js
+
   generate-bridge:
     needs: [validate-build-configuration]
     uses: ./.github/workflows/bridge.yml

@@ -116,6 +116,9 @@ jobs:
     - name: Validate latest release gate
       run: bash tests/test_latest_release_gate.sh
 
+    - name: Validate release download selection
+      run: node tests/test_release_download_selector.js
+
     - name: Validate vcpkg discovery
       run: bash tests/test_vcpkg_resolution.sh
 
