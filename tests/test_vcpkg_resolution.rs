@@ -3,7 +3,7 @@ mod vcpkg_root;
 
 use std::{ffi::OsString, fs, path::PathBuf};
 
-use vcpkg_root::resolve_vcpkg_root;
+use vcpkg_root::{has_target_headers, resolve_vcpkg_root};
 
 #[test]
 fn resolves_configured_root() {
@@ -110,4 +110,34 @@ fn returns_none_when_no_candidate_exists() {
         ),
         None,
     );
+}
+
+#[test]
+fn rejects_an_empty_linux_vcpkg_root() {
+    let root = std::env::temp_dir().join(format!(
+        "medusadesk-empty-vcpkg-root-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&root).expect("create empty vcpkg root");
+
+    assert!(
+        !has_target_headers(&root, "linux", "x86_64"),
+        "an empty directory must not be treated as a usable vcpkg installation",
+    );
+
+    fs::remove_dir_all(root).expect("remove empty vcpkg root");
+}
+
+#[test]
+fn accepts_linux_vcpkg_target_headers() {
+    let root = std::env::temp_dir().join(format!(
+        "medusadesk-vcpkg-target-headers-{}",
+        std::process::id()
+    ));
+    fs::create_dir_all(root.join("installed/x64-linux/include"))
+        .expect("create vcpkg target include directory");
+
+    assert!(has_target_headers(&root, "linux", "x86_64"));
+
+    fs::remove_dir_all(root).expect("remove vcpkg target headers test directory");
 }

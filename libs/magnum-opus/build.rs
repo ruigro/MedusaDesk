@@ -8,7 +8,7 @@ use std::{
 mod vcpkg_root;
 
 #[cfg(not(all(target_os = "linux", feature = "linux-pkg-config")))]
-use vcpkg_root::resolve_vcpkg_root;
+use vcpkg_root::{has_target_headers, resolve_vcpkg_root};
 
 #[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
 fn link_pkg_config(name: &str) -> Vec<PathBuf> {
@@ -147,14 +147,44 @@ fn find_package(name: &str) -> Vec<PathBuf> {
             std::env::var_os("CARGO_MANIFEST_DIR"),
         ],
     ) {
-        vec![link_vcpkg(vcpkg_root, name)]
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        if !has_target_headers(&vcpkg_root, &target_os, &target_arch) {
+            println!(
+                "cargo:warning=Native {name} headers were not found; using checked-in bindings (the native library remains required when linking)"
+            );
+            Vec::new()
+        } else {
+            vec![link_vcpkg(vcpkg_root, name)]
+        }
+    } else if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!(
+            "cargo:warning=Native {name} headers were not found; using checked-in bindings (the native library remains required when linking)"
+        );
+        Vec::new()
     } else {
         // Try using homebrew
         vec![link_homebrew_m1(name)]
     }
 }
 
-fn generate_bindings(ffi_header: &Path, include_paths: &[PathBuf], ffi_rs: &Path) {
+fn generate_bindings(
+    ffi_header: &Path,
+    include_paths: &[PathBuf],
+    ffi_rs: &Path,
+    checked_in_bindings: &Path,
+) {
+    if include_paths.is_empty() {
+        std::fs::copy(checked_in_bindings, ffi_rs).unwrap_or_else(|error| {
+            panic!(
+                "failed to copy checked-in bindings from {} to {}: {error}",
+                checked_in_bindings.display(),
+                ffi_rs.display()
+            )
+        });
+        return;
+    }
+
     #[derive(Debug)]
     struct ParseCallbacks;
     impl bindgen::callbacks::ParseCallbacks for ParseCallbacks {
@@ -176,6 +206,12 @@ fn generate_bindings(ffi_header: &Path, include_paths: &[PathBuf], ffi_rs: &Path
     }
 
     b.generate().unwrap().write_to_file(ffi_rs).unwrap();
+    std::fs::copy(ffi_rs, checked_in_bindings).unwrap_or_else(|error| {
+        panic!(
+            "failed to update checked-in bindings at {}: {error}",
+            checked_in_bindings.display()
+        )
+    });
 }
 
 fn gen_opus() {
@@ -192,7 +228,8 @@ fn gen_opus() {
     }
 
     let ffi_rs = out_dir.join("opus_ffi.rs");
-    generate_bindings(&ffi_header, &includes, &ffi_rs);
+    let checked_in_bindings = src_dir.join("generated").join("opus_ffi.rs");
+    generate_bindings(&ffi_header, &includes, &ffi_rs, &checked_in_bindings);
 }
 
 fn main() {

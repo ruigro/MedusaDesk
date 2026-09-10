@@ -7,7 +7,7 @@ use std::{
 #[path = "../vcpkg_root.rs"]
 mod vcpkg_root;
 
-use vcpkg_root::resolve_vcpkg_root;
+use vcpkg_root::{has_target_headers, resolve_vcpkg_root};
 
 #[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
 fn link_pkg_config(name: &str) -> Vec<PathBuf> {
@@ -159,7 +159,21 @@ fn find_package(name: &str) -> Vec<PathBuf> {
             std::env::var_os("CARGO_MANIFEST_DIR"),
         ],
     ) {
-        vec![link_vcpkg(vcpkg_root, name)]
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+        let target_arch = std::env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_default();
+        if !has_target_headers(&vcpkg_root, &target_os, &target_arch) {
+            println!(
+                "cargo:warning=Native {name} headers were not found; using checked-in bindings (the native library remains required when linking)"
+            );
+            Vec::new()
+        } else {
+            vec![link_vcpkg(vcpkg_root, name)]
+        }
+    } else if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!(
+            "cargo:warning=Native {name} headers were not found; using checked-in bindings (the native library remains required when linking)"
+        );
+        Vec::new()
     } else {
         // Try using homebrew
         vec![link_homebrew_m1(name)]
@@ -173,6 +187,17 @@ fn generate_bindings(
     exact_file: &Path,
     regex: &str,
 ) {
+    if include_paths.is_empty() {
+        fs::copy(exact_file, ffi_rs).unwrap_or_else(|error| {
+            panic!(
+                "failed to copy checked-in bindings from {} to {}: {error}",
+                exact_file.display(),
+                ffi_rs.display()
+            )
+        });
+        return;
+    }
+
     let mut b = bindgen::builder()
         .header(ffi_header.to_str().unwrap())
         .allowlist_type(regex)
@@ -188,7 +213,12 @@ fn generate_bindings(
     }
 
     b.generate().unwrap().write_to_file(ffi_rs).unwrap();
-    fs::copy(ffi_rs, exact_file).ok(); // ignore failure
+    fs::copy(ffi_rs, exact_file).unwrap_or_else(|error| {
+        panic!(
+            "failed to update checked-in bindings at {}: {error}",
+            exact_file.display()
+        )
+    });
 }
 
 fn gen_vcpkg_package(package: &str, ffi_header: &str, generated: &str, regex: &str) {
