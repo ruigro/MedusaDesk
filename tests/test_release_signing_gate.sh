@@ -2,6 +2,7 @@
 set -euo pipefail
 
 workflow="${1:-.github/workflows/flutter-build.yml}"
+build_script="${2:-build.py}"
 windows_release_job="$(sed -n '1,/^  build-for-windows-sciter:/p' "$workflow")"
 
 require_text() {
@@ -28,5 +29,12 @@ if [ "$verify_line" -ge "$publish_line" ]; then
   echo "signature verification must run before publishing" >&2
   exit 1
 fi
+
+if grep -Eq "(pip3 install|python3 ./generate.py)" "$build_script"; then
+  echo "Windows packaging must reuse the Python interpreter running build.py" >&2
+  exit 1
+fi
+grep -Fq -- '"{sys.executable}" -m pip install' "$build_script"
+grep -Fq -- '"{sys.executable}" ./generate.py' "$build_script"
 
 echo "release signing gate verified"
