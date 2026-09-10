@@ -21,7 +21,7 @@ function inferRepo() {
 function detectPlatform() {
   const ua = navigator.userAgent.toLowerCase();
   const platform = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
-  const arch = navigator.userAgentData?.architecture?.toLowerCase() || ua;
+  const arch = `${navigator.userAgentData?.architecture || ""} ${navigator.platform || ""} ${navigator.userAgent}`.toLowerCase();
 
   if (ua.includes("windows") || platform.includes("win")) {
     return { key: "windows", label: "Windows" };
@@ -31,7 +31,13 @@ function detectPlatform() {
     return { key: "macos", label: isArm ? "macOS Apple Silicon" : "macOS" };
   }
   if (ua.includes("linux") || platform.includes("linux")) {
-    return { key: "linux", label: "Linux" };
+    if (arch.includes("aarch64") || arch.includes("arm64")) {
+      return { key: "linux", label: "Linux ARM64", arch: "aarch64" };
+    }
+    if (arch.includes("armv7") || arch.includes("armhf") || arch.includes(" arm")) {
+      return { key: "linux", label: "Linux ARMv7", arch: "armv7" };
+    }
+    return { key: "linux", label: "Linux", arch: "x86_64" };
   }
   return { key: "unknown", label: "your OS" };
 }
@@ -73,12 +79,24 @@ function formatDate(value) {
 
 function pickPrimaryAsset(assets, platform) {
   const platformAssets = assets.filter((asset) => assetPlatform(asset) === platform.key);
+  const linuxArchTokens = {
+    x86_64: ["x86_64", "amd64"],
+    aarch64: ["aarch64", "arm64"],
+    armv7: ["armv7", "armhf"],
+  };
+  const architectureAssets = platform.key === "linux" && platform.arch
+    ? platformAssets.filter((asset) =>
+        linuxArchTokens[platform.arch].some((token) => asset.name.toLowerCase().includes(token)))
+    : platformAssets;
+  if (platform.key === "linux" && platform.arch && !architectureAssets.length) {
+    return undefined;
+  }
   const preferred = platform.key === "macos"
     ? ["aarch64", "arm64", ".dmg", "x86_64"]
     : platform.key === "windows"
       ? [".msi", ".exe", ".zip"]
       : [".appimage", ".deb", ".rpm", ".zip"];
-  const candidates = platformAssets.length ? platformAssets : assets;
+  const candidates = architectureAssets.length ? architectureAssets : assets;
 
   return (
     preferred
