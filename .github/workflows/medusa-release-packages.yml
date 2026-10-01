@@ -81,6 +81,12 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt
 
+      - name: Test vcpkg root resolution
+        shell: bash
+        run: |
+          rustc --test build_support/vcpkg_root.rs -o "${RUNNER_TEMP}/vcpkg-root-tests"
+          "${RUNNER_TEMP}/vcpkg-root-tests"
+
       - name: Cache Rust
         uses: Swatinem/rust-cache@v2
         with:

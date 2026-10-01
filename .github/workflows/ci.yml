@@ -184,6 +184,12 @@ jobs:
         cargo -V
         rustc -V
 
+    - name: Test vcpkg root resolution
+      shell: bash
+      run: |
+        rustc --test build_support/vcpkg_root.rs -o "${RUNNER_TEMP}/vcpkg-root-tests"
+        "${RUNNER_TEMP}/vcpkg-root-tests"
+
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
 
     - name: Build

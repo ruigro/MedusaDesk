@@ -180,6 +180,24 @@ fn find_package(name: &str) -> Vec<PathBuf> {
     }
 }
 
+fn find_vcpkg_root() -> Option<PathBuf> {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let explicit_root = env::var_os("VCPKG_ROOT");
+    let home = env::var_os("HOME");
+    let cargo_home = env::var_os("CARGO_HOME");
+    let rustup_home = env::var_os("RUSTUP_HOME");
+    let rustc = env::var_os("RUSTC");
+    vcpkg_root::resolve_vcpkg_root(
+        &target_os,
+        explicit_root.as_deref(),
+        home.as_deref(),
+        cargo_home.as_deref(),
+        rustup_home.as_deref(),
+        rustc.as_deref(),
+        Path::is_dir,
+    )
+}
+
 fn generate_bindings(
     ffi_header: &Path,
     include_paths: &[PathBuf],
@@ -288,6 +306,11 @@ fn ffmpeg() {
 fn main() {
     // in this crate, these are also valid configurations
     println!("cargo:rustc-check-cfg=cfg(dxgi,quartz,x11)");
+    println!("cargo:rerun-if-env-changed=CARGO_HOME");
+    println!("cargo:rerun-if-env-changed=HOME");
+    println!("cargo:rerun-if-env-changed=RUSTC");
+    println!("cargo:rerun-if-env-changed=RUSTUP_HOME");
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
 
     // there is problem with cfg(target_os) in build.rs, so use our workaround
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
