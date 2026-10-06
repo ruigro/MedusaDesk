@@ -58,9 +58,13 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-pc-windows-msvc
 
-      - name: Run vcpkg resolution tests
+      # The rest of this suite covers Linux discovery and runs in ci.yml; on
+      # this image the preinstalled C:\vcpkg satisfies its "/vcpkg" probes.
+      - name: Test the Windows vcpkg triplet
         shell: bash
-        run: bash tests/test_vcpkg_resolution.sh
+        run: |
+          rustc --edition 2021 --test tests/test_vcpkg_resolution.rs -o "$RUNNER_TEMP/vcpkg-tests.exe"
+          "$RUNNER_TEMP/vcpkg-tests.exe" --exact selects_the_windows_vcpkg_triplet_for_the_target_arch
 
       # bindgen needs a native ARM64 libclang; LLVM 15 is the version whose
       # aom bindings are complete (newer releases drop struct fields).
@@ -82,21 +86,22 @@ jobs:
           C:\flutter\bin\flutter.bat precache --windows
 
       # Classic mode from outside the repo manifest: a build without hwcodec
-      # links only these libraries, and ffmpeg/mfx are x64-only here.
+      # links only these libraries, and ffmpeg/mfx are x64-only here. The
+      # image's own C:\vcpkg is not at the pinned commit, so use a fresh one.
       - name: Install vcpkg dependencies
         shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
-          git -C C:\vcpkg checkout $env:VCPKG_COMMIT_ID
-          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          git clone https://github.com/microsoft/vcpkg.git C:\mdvcpkg
+          git -C C:\mdvcpkg checkout $env:VCPKG_COMMIT_ID
+          C:\mdvcpkg\bootstrap-vcpkg.bat -disableMetrics
           Push-Location $env:RUNNER_TEMP
-          C:\vcpkg\vcpkg.exe install aom libvpx libyuv opus --triplet $env:VCPKG_TRIPLET --overlay-ports="$env:GITHUB_WORKSPACE\res\vcpkg"
+          C:\mdvcpkg\vcpkg.exe install aom libvpx libyuv opus --triplet $env:VCPKG_TRIPLET --overlay-ports="$env:GITHUB_WORKSPACE\res\vcpkg"
           if ($LASTEXITCODE -ne 0) {
-            Get-ChildItem C:\vcpkg\buildtrees -Recurse -Filter *.log | ForEach-Object { "== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
+            Get-ChildItem C:\mdvcpkg\buildtrees -Recurse -Filter *.log | ForEach-Object { "== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
             exit 1
           }
           Pop-Location
-          "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "VCPKG_ROOT=C:\mdvcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Build MedusaDesk
         shell: pwsh
