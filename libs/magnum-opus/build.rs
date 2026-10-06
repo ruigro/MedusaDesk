@@ -8,7 +8,7 @@ use std::{
 mod vcpkg_root;
 
 #[cfg(not(all(target_os = "linux", feature = "linux-pkg-config")))]
-use vcpkg_root::{has_target_headers, resolve_vcpkg_root};
+use vcpkg_root::{has_target_headers, resolve_vcpkg_root, windows_vcpkg_triplet};
 
 #[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
 fn link_pkg_config(name: &str) -> Vec<PathBuf> {
@@ -34,7 +34,7 @@ fn link_vcpkg(mut path: PathBuf, name: &str) -> PathBuf {
     } else if target_os == "macos" && target_arch == "arm64" {
         "arm64-osx".to_owned()
     } else if target_os == "windows" {
-        "x64-windows-static".to_owned()
+        windows_vcpkg_triplet(&target_arch)
     } else {
         format!("{}-{}", target_arch, target_os)
     };

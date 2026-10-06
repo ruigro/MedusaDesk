@@ -1,0 +1,201 @@
+name: Build MedusaDesk Windows ARM64
+
+# Flutter only builds Windows ARM64 on an ARM64 host, so this runs natively on
+# GitHub's windows-11-arm runner. Code signing stays on the machine that holds
+# the Far Island certificate, so the build is split into two stages:
+#   bundle - build the unsigned app folder (artifact)
+#   pack   - wrap the folder, after its files were signed, into the
+#            self-extracting installer (artifact), which is then signed too.
+# The pack stage reads the signed folder as
+# MedusaDesk-windows-arm64-signed-bundle.zip from a draft release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Build stage
+        type: choice
+        options:
+          - bundle
+          - pack
+        default: bundle
+      signed_bundle_release:
+        description: Draft release tag holding MedusaDesk-windows-arm64-signed-bundle.zip (pack stage)
+        type: string
+        default: windows-arm64-staging
+
+permissions:
+  contents: read
+
+env:
+  # Flutter >= 3.27 is required by the current UI code; 3.38.5 built v0.1.8.
+  FLUTTER_VERSION: "3.38.5"
+  RUST_VERSION: "1.95.0"
+  LLVM_VERSION: "15.0.6"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VCPKG_TRIPLET: arm64-windows-static
+  SIGNED_BUNDLE_ASSET: MedusaDesk-windows-arm64-signed-bundle.zip
+
+jobs:
+  bundle:
+    if: inputs.stage == 'bundle'
+    runs-on: windows-11-arm
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: arm64
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-pc-windows-msvc
+
+      - name: Run vcpkg resolution tests
+        shell: bash
+        run: bash tests/test_vcpkg_resolution.sh
+
+      # bindgen needs a native ARM64 libclang; LLVM 15 is the version whose
+      # aom bindings are complete (newer releases drop struct fields).
+      - name: Install LLVM
+        shell: pwsh
+        run: |
+          $installer = "$env:RUNNER_TEMP\llvm.exe"
+          Invoke-WebRequest -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$env:LLVM_VERSION/LLVM-$env:LLVM_VERSION-woa64.exe" -OutFile $installer
+          Start-Process -FilePath $installer -ArgumentList '/S', '/D=C:\LLVM' -Wait
+          if (-not (Test-Path 'C:\LLVM\bin\libclang.dll')) { throw 'libclang.dll was not installed' }
+          "LIBCLANG_PATH=C:\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Install Flutter
+        shell: pwsh
+        run: |
+          git clone --depth 1 --branch $env:FLUTTER_VERSION https://github.com/flutter/flutter.git C:\flutter
+          "C:\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          C:\flutter\bin\flutter.bat --version
+          C:\flutter\bin\flutter.bat precache --windows
+
+      # Classic mode from outside the repo manifest: a build without hwcodec
+      # links only these libraries, and ffmpeg/mfx are x64-only here.
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git C:\vcpkg
+          git -C C:\vcpkg checkout $env:VCPKG_COMMIT_ID
+          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          Push-Location $env:RUNNER_TEMP
+          C:\vcpkg\vcpkg.exe install aom libvpx libyuv opus --triplet $env:VCPKG_TRIPLET --overlay-ports="$env:GITHUB_WORKSPACE\res\vcpkg"
+          if ($LASTEXITCODE -ne 0) {
+            Get-ChildItem C:\vcpkg\buildtrees -Recurse -Filter *.log | ForEach-Object { "== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
+            exit 1
+          }
+          Pop-Location
+          "VCPKG_ROOT=C:\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Build MedusaDesk
+        shell: pwsh
+        run: |
+          python build.py --flutter --skip-portable-pack
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Require ARM64 binaries
+        shell: python
+        run: |
+          import pathlib, struct, sys
+          bundle = pathlib.Path("flutter/build/windows/arm64/runner/Release")
+          binaries = [p for p in bundle.iterdir() if p.suffix.lower() in (".exe", ".dll")]
+          if not binaries:
+              sys.exit(f"no binaries in {bundle}")
+          bad = []
+          for path in binaries:
+              data = path.read_bytes()
+              pe = struct.unpack_from("<I", data, 0x3C)[0]
+              machine = struct.unpack_from("<H", data, pe + 4)[0]
+              print(f"{path.name}: machine=0x{machine:04X}")
+              if machine != 0xAA64:
+                  bad.append(path.name)
+          if bad:
+              sys.exit(f"not ARM64: {', '.join(bad)}")
+
+      - name: Upload unsigned bundle
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: MedusaDesk-windows-arm64-unsigned-bundle
+          path: flutter/build/windows/arm64/runner/Release
+
+  pack:
+    if: inputs.stage == 'pack'
+    runs-on: windows-11-arm
+    permissions:
+      # Draft releases are only visible to tokens with write access.
+      contents: write
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: arm64
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-pc-windows-msvc
+
+      - name: Fetch signed bundle
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "${{ inputs.signed_bundle_release }}" --repo "${{ github.repository }}" --pattern $env:SIGNED_BUNDLE_ASSET --dir $env:RUNNER_TEMP
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Expand-Archive -Path "$env:RUNNER_TEMP\$env:SIGNED_BUNDLE_ASSET" -DestinationPath signed-bundle
+
+      - name: Require signed payload
+        shell: pwsh
+        run: |
+          $binaries = Get-ChildItem signed-bundle -File | Where-Object { $_.Name -match '^(rustdesk|medusadesk)\.exe$|^librustdesk\.dll$|^dylib_virtual_display\.dll$' }
+          if ($binaries.Count -lt 3) { throw "Expected the app exe, librustdesk.dll and dylib_virtual_display.dll in the bundle" }
+          foreach ($binary in $binaries) {
+            $signature = Get-AuthenticodeSignature -FilePath $binary.FullName
+            "$($binary.Name): $($signature.Status) $($signature.SignerCertificate.Subject)"
+            if ($signature.Status -ne 'Valid') { throw "$($binary.Name) is not validly signed" }
+          }
+
+      - name: Build self-extracting installer
+        shell: pwsh
+        run: |
+          $appExe = Get-ChildItem signed-bundle -File | Where-Object { $_.Name -match '^(rustdesk|medusadesk)\.exe$' } | Select-Object -First 1
+          Push-Location libs/portable
+          python -m pip install -r requirements.txt
+          python ./generate.py -f ../../signed-bundle -o . -e "../../signed-bundle/$($appExe.Name)"
+          Pop-Location
+          if (-not (Test-Path target/release/rustdesk-portable-packer.exe)) { throw 'The portable packer was not built' }
+          New-Item -ItemType Directory -Force out | Out-Null
+          Move-Item target/release/rustdesk-portable-packer.exe out/MedusaDesk-windows-arm64-unsigned.exe
+
+      - name: Require ARM64 installer
+        shell: python
+        run: |
+          import struct, sys
+          data = open("out/MedusaDesk-windows-arm64-unsigned.exe", "rb").read()
+          pe = struct.unpack_from("<I", data, 0x3C)[0]
+          machine = struct.unpack_from("<H", data, pe + 4)[0]
+          print(f"machine=0x{machine:04X}")
+          if machine != 0xAA64:
+              sys.exit("installer is not ARM64")
+
+      - name: Upload unsigned installer
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: MedusaDesk-windows-arm64-unsigned-installer
+          path: out/MedusaDesk-windows-arm64-unsigned.exe

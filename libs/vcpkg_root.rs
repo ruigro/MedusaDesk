@@ -43,3 +43,15 @@ pub fn has_target_headers(root: &std::path::Path, target_os: &str, target_arch: 
         .join("include")
         .is_dir()
 }
+
+/// Static-CRT vcpkg triplet for a Windows target, matching the `+crt-static`
+/// rustflags in `.cargo/config.toml`. Accepts `CARGO_CFG_TARGET_ARCH` values
+/// as well as the vcpkg architecture names the build scripts normalize to.
+pub fn windows_vcpkg_triplet(target_arch: &str) -> String {
+    let arch = match target_arch {
+        "x86_64" | "x64" => "x64",
+        "aarch64" | "arm64" => "arm64",
+        other => other,
+    };
+    format!("{arch}-windows-static")
+}

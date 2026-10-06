@@ -3,7 +3,7 @@ mod vcpkg_root;
 
 use std::{ffi::OsString, fs, path::PathBuf};
 
-use vcpkg_root::{has_target_headers, resolve_vcpkg_root};
+use vcpkg_root::{has_target_headers, resolve_vcpkg_root, windows_vcpkg_triplet};
 
 #[test]
 fn resolves_configured_root() {
@@ -140,4 +140,15 @@ fn accepts_linux_vcpkg_target_headers() {
     assert!(has_target_headers(&root, "linux", "x86_64"));
 
     fs::remove_dir_all(root).expect("remove vcpkg target headers test directory");
+}
+
+#[test]
+fn selects_the_windows_vcpkg_triplet_for_the_target_arch() {
+    assert_eq!(windows_vcpkg_triplet("x86_64"), "x64-windows-static");
+    assert_eq!(windows_vcpkg_triplet("x86"), "x86-windows-static");
+    assert_eq!(
+        windows_vcpkg_triplet("aarch64"),
+        "arm64-windows-static",
+        "Windows ARM64 must not link the x64 vcpkg libraries",
+    );
 }

@@ -21,3 +21,11 @@ done
 
 grep -Fq 'using checked-in bindings' libs/magnum-opus/build.rs
 grep -Fq 'using checked-in bindings' libs/scrap/build.rs
+
+# Both build scripts must take the Windows triplet from the shared helper,
+# or an ARM64 build silently links the x64 vcpkg libraries.
+for build_script in libs/magnum-opus/build.rs libs/scrap/build.rs; do
+  grep -Fq 'windows_vcpkg_triplet(&target_arch)' "$build_script"
+  ! grep -Fq '"x64-windows-static"' "$build_script"
+done
+grep -Fq "[target.aarch64-pc-windows-msvc]" .cargo/config.toml
