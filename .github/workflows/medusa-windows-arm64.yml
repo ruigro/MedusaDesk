@@ -172,8 +172,12 @@ jobs:
       # Draft releases are only visible to tokens with write access.
       contents: write
     steps:
+      # The packer is a workspace member, and cargo cannot load the workspace
+      # without the hbb_common submodule.
       - name: Checkout source code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
 
       - name: Install Python
         uses: actions/setup-python@v5
