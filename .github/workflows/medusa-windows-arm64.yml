@@ -28,8 +28,10 @@ permissions:
   contents: read
 
 env:
-  # Flutter >= 3.27 is required by the current UI code; 3.38.5 built v0.1.8.
-  FLUTTER_VERSION: "3.38.5"
+  # Flutter targets the architecture of its Dart SDK, and Windows ARM64 Dart
+  # SDK and engine artifacts are only published from 3.44 on (3.38.5, which
+  # built v0.1.8 for x64, silently falls back to an x64 build here).
+  FLUTTER_VERSION: "3.44.9"
   RUST_VERSION: "1.95.0"
   LLVM_VERSION: "15.0.6"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
@@ -58,6 +60,18 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: aarch64-pc-windows-msvc
 
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: windows-arm64
+          cache-on-failure: true
+
+      - name: Restore vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: C:\mdvcpkg\installed
+          key: vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('res/vcpkg/**') }}
+
       # The rest of this suite covers Linux discovery and runs in ci.yml; on
       # this image the preinstalled C:\vcpkg satisfies its "/vcpkg" probes.
       - name: Test the Windows vcpkg triplet
@@ -84,6 +98,9 @@ jobs:
           "C:\flutter\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           C:\flutter\bin\flutter.bat --version
           C:\flutter\bin\flutter.bat precache --windows
+          $dartArch = (C:\flutter\bin\cache\dart-sdk\bin\dart.exe --version) -join ' '
+          $dartArch
+          if ($dartArch -notmatch 'windows_arm64') { throw 'Flutter installed an x64 Dart SDK, so it would build x64' }
 
       # Classic mode from outside the repo manifest: a build without hwcodec
       # links only these libraries, and ffmpeg/mfx are x64-only here. The
@@ -91,8 +108,10 @@ jobs:
       - name: Install vcpkg dependencies
         shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git C:\mdvcpkg
-          git -C C:\mdvcpkg checkout $env:VCPKG_COMMIT_ID
+          # The package cache may already have created C:\mdvcpkg\installed.
+          git init -q C:\mdvcpkg
+          git -C C:\mdvcpkg fetch -q --depth 1 https://github.com/microsoft/vcpkg.git $env:VCPKG_COMMIT_ID
+          git -C C:\mdvcpkg checkout -q FETCH_HEAD
           C:\mdvcpkg\bootstrap-vcpkg.bat -disableMetrics
           Push-Location $env:RUNNER_TEMP
           C:\mdvcpkg\vcpkg.exe install aom libvpx libyuv opus libsodium --triplet $env:VCPKG_TRIPLET --overlay-ports="$env:GITHUB_WORKSPACE\res\vcpkg"
@@ -105,6 +124,15 @@ jobs:
           # libsodium-sys only bundles x64/x86 MSVC libraries.
           "SODIUM_LIB_DIR=C:\mdvcpkg\installed\$env:VCPKG_TRIPLET\lib" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           if (-not (Test-Path "C:\mdvcpkg\installed\$env:VCPKG_TRIPLET\lib\libsodium.lib")) { throw 'libsodium.lib was not installed' }
+
+      # Saved right away, so a later failing step does not discard ~10 min of
+      # native dependency builds.
+      - name: Save vcpkg packages
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: C:\mdvcpkg\installed
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Build MedusaDesk
         shell: pwsh
