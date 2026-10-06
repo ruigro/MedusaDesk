@@ -42,6 +42,21 @@ assert.equal(
   "rustdesk-1.4.7-armv7-sciter.deb",
 );
 
+const linuxArm64Assets = [
+  ...assets,
+  { name: "MedusaDesk-v0.1.8-linux-arm64.deb" },
+];
+const linuxArm64 = loadSelector("Mozilla/5.0 (X11; Linux aarch64)", "Linux aarch64", "arm");
+assert.equal(
+  linuxArm64.pickPrimaryAsset(linuxArm64Assets, linuxArm64.detectPlatform()).name,
+  "MedusaDesk-v0.1.8-linux-arm64.deb",
+);
+assert.equal(
+  x64.pickPrimaryAsset(linuxArm64Assets, x64.detectPlatform()).name,
+  "rustdesk-1.4.7-x86_64-sciter.deb",
+  "an x64 Linux PC must never be offered the ARM64 package",
+);
+
 const windowsAssets = [
   { name: "MedusaDesk-v0.1.8-windows-arm64.exe" },
   { name: "MedusaDesk-v0.1.8-windows-x64.exe" },
