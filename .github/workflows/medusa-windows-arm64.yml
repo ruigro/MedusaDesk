@@ -95,13 +95,16 @@ jobs:
           git -C C:\mdvcpkg checkout $env:VCPKG_COMMIT_ID
           C:\mdvcpkg\bootstrap-vcpkg.bat -disableMetrics
           Push-Location $env:RUNNER_TEMP
-          C:\mdvcpkg\vcpkg.exe install aom libvpx libyuv opus --triplet $env:VCPKG_TRIPLET --overlay-ports="$env:GITHUB_WORKSPACE\res\vcpkg"
+          C:\mdvcpkg\vcpkg.exe install aom libvpx libyuv opus libsodium --triplet $env:VCPKG_TRIPLET --overlay-ports="$env:GITHUB_WORKSPACE\res\vcpkg"
           if ($LASTEXITCODE -ne 0) {
             Get-ChildItem C:\mdvcpkg\buildtrees -Recurse -Filter *.log | ForEach-Object { "== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
             exit 1
           }
           Pop-Location
           "VCPKG_ROOT=C:\mdvcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          # libsodium-sys only bundles x64/x86 MSVC libraries.
+          "SODIUM_LIB_DIR=C:\mdvcpkg\installed\$env:VCPKG_TRIPLET\lib" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          if (-not (Test-Path "C:\mdvcpkg\installed\$env:VCPKG_TRIPLET\lib\libsodium.lib")) { throw 'libsodium.lib was not installed' }
 
       - name: Build MedusaDesk
         shell: pwsh
