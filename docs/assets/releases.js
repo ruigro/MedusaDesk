@@ -18,13 +18,18 @@ function inferRepo() {
   return fallbackRepo;
 }
 
-function detectPlatform() {
+function detectPlatform(architectureHint = "") {
   const ua = navigator.userAgent.toLowerCase();
   const platform = (navigator.userAgentData?.platform || navigator.platform || "").toLowerCase();
-  const arch = `${navigator.userAgentData?.architecture || ""} ${navigator.platform || ""} ${navigator.userAgent}`.toLowerCase();
+  const arch = `${architectureHint} ${navigator.userAgentData?.architecture || ""} ${navigator.platform || ""} ${navigator.userAgent}`.toLowerCase();
 
   if (ua.includes("windows") || platform.includes("win")) {
-    return { key: "windows", label: "Windows" };
+    // Windows browsers on ARM still send an x64 user agent; only the
+    // architecture client hint ("arm") or an explicit ARM64 token is reliable.
+    if (/\b(arm|arm64|aarch64)\b/.test(arch)) {
+      return { key: "windows", label: "Windows ARM64", arch: "arm64" };
+    }
+    return { key: "windows", label: "Windows", arch: "x64" };
   }
   if (ua.includes("mac os") || platform.includes("mac")) {
     const isArm = arch.includes("arm") || arch.includes("aarch64");
@@ -54,6 +59,15 @@ function assetPlatform(asset) {
     return "linux";
   }
   return "unknown";
+}
+
+function isArm64Asset(asset) {
+  const name = asset.name.toLowerCase();
+  return name.includes("arm64") || name.includes("aarch64");
+}
+
+function matchesWindowsArch(asset, platform) {
+  return platform.key !== "windows" || isArm64Asset(asset) === (platform.arch === "arm64");
 }
 
 function formatBytes(bytes) {
@@ -87,8 +101,10 @@ function pickPrimaryAsset(assets, platform) {
   const architectureAssets = platform.key === "linux" && platform.arch
     ? platformAssets.filter((asset) =>
         linuxArchTokens[platform.arch].some((token) => asset.name.toLowerCase().includes(token)))
-    : platformAssets;
-  if (platform.key === "linux" && platform.arch && !architectureAssets.length) {
+    : platform.key === "windows"
+      ? platformAssets.filter((asset) => matchesWindowsArch(asset, platform))
+      : platformAssets;
+  if ((platform.key === "linux" || platform.key === "windows") && platform.arch && !architectureAssets.length) {
     return undefined;
   }
   const preferred = platform.key === "macos"
@@ -132,13 +148,13 @@ function renderNotes(body) {
   notes.innerHTML = safe;
 }
 
-function renderRelease(repo, release) {
+function renderRelease(repo, release, architectureHint) {
   const releaseTitle = document.getElementById("release-title");
   const releaseDate = document.getElementById("release-date");
   const primaryDownload = document.getElementById("primary-download");
   const allReleases = document.getElementById("all-releases-link");
   const downloadList = document.getElementById("download-list");
-  const platform = detectPlatform();
+  const platform = detectPlatform(architectureHint);
 
   const tag = release.tag_name || release.name || fallbackReleaseTag;
   releaseTitle.textContent = release.name || tag;
@@ -169,7 +185,7 @@ function renderRelease(repo, release) {
   downloadList.innerHTML = assets
     .map((asset) => {
       const name = escapeHtml(asset.name);
-      const isDetected = assetPlatform(asset) === platform.key;
+      const isDetected = assetPlatform(asset) === platform.key && matchesWindowsArch(asset, platform);
       return `
         <div class="download-row${isDetected ? " recommended" : ""}">
           <div>
@@ -201,13 +217,20 @@ function renderError(repo) {
 
 async function loadRelease() {
   const repo = inferRepo();
+  let architectureHint = "";
+  try {
+    const hints = await navigator.userAgentData?.getHighEntropyValues?.(["architecture"]);
+    architectureHint = hints?.architecture || "";
+  } catch (error) {
+    architectureHint = "";
+  }
   try {
     const response = await fetch(`https://api.github.com/repos/${repo}/releases/latest`, {
       headers: { Accept: "application/vnd.github+json" },
     });
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
     const release = await response.json();
-    renderRelease(repo, release);
+    renderRelease(repo, release, architectureHint);
   } catch (error) {
     renderError(repo);
   }

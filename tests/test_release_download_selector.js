@@ -42,4 +42,30 @@ assert.equal(
   "rustdesk-1.4.7-armv7-sciter.deb",
 );
 
-console.log("Linux release download selection passed");
+const windowsAssets = [
+  { name: "MedusaDesk-v0.1.8-windows-arm64.exe" },
+  { name: "MedusaDesk-v0.1.8-windows-x64.exe" },
+];
+const windowsUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)";
+
+const windowsX64 = loadSelector(windowsUserAgent, "Win32", "x86");
+assert.equal(
+  windowsX64.pickPrimaryAsset(windowsAssets, windowsX64.detectPlatform()).name,
+  "MedusaDesk-v0.1.8-windows-x64.exe",
+  "an x64 Windows PC must never be offered the ARM64 installer",
+);
+
+const windowsArm = loadSelector(windowsUserAgent, "Win32");
+assert.equal(
+  windowsArm.pickPrimaryAsset(windowsAssets, windowsArm.detectPlatform("arm")).name,
+  "MedusaDesk-v0.1.8-windows-arm64.exe",
+  "the architecture client hint must select the ARM64 installer",
+);
+
+assert.equal(
+  windowsArm.pickPrimaryAsset([windowsAssets[1]], windowsArm.detectPlatform("arm")),
+  undefined,
+  "Windows ARM64 must not fall back to the x64 installer as its own build",
+);
+
+console.log("Linux and Windows release download selection passed");
