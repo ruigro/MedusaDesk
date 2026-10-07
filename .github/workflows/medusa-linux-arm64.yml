@@ -1,0 +1,156 @@
+name: Build MedusaDesk Linux ARM64
+
+# Builds the Flutter .deb natively on GitHub's ubuntu-22.04-arm runner, so the
+# package needs glibc 2.35+ (Ubuntu 22.04, Debian 12, Raspberry Pi OS bookworm
+# or newer). Like the other Linux packages it is not signed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to attach the .deb to (empty = artifact only)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  # Same Flutter as the v0.1.8 x64 build; google_fonts 6.3.3 needs >= 3.35.
+  FLUTTER_VERSION: "3.38.5"
+  RUST_VERSION: "1.95.0"
+  VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
+  VCPKG_TRIPLET: arm64-linux
+  DEB_ARCH: arm64
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04-arm
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang cmake curl gcc g++ git libclang-dev nasm ninja-build pkg-config \
+            unzip wget xz-utils zip autoconf automake libtool \
+            libasound2-dev libayatana-appindicator3-dev libgstreamer1.0-dev \
+            libgstreamer-plugins-base1.0-dev libgtk-3-dev liblzma-dev libpam0g-dev \
+            libpulse-dev libssl-dev libunwind-dev libva-dev libvdpau-dev \
+            libxcb-randr0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxdo-dev \
+            libxfixes-dev xvfb
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          prefix-key: linux-arm64
+          cache-on-failure: true
+
+      - name: Restore vcpkg packages
+        id: vcpkg-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: /opt/mdvcpkg/installed
+          key: vcpkg-${{ env.VCPKG_TRIPLET }}-${{ env.VCPKG_COMMIT_ID }}-${{ hashFiles('res/vcpkg/**') }}
+
+      # Classic mode from outside the repo manifest: a build without hwcodec
+      # links only these libraries, and building ffmpeg would add ~30 min.
+      - name: Install vcpkg dependencies
+        run: |
+          sudo mkdir -p /opt/mdvcpkg && sudo chown "$USER" /opt/mdvcpkg
+          # The package cache may already have created /opt/mdvcpkg/installed.
+          git init -q /opt/mdvcpkg
+          git -C /opt/mdvcpkg fetch -q --depth 1 https://github.com/microsoft/vcpkg.git "$VCPKG_COMMIT_ID"
+          git -C /opt/mdvcpkg checkout -q FETCH_HEAD
+          /opt/mdvcpkg/bootstrap-vcpkg.sh -disableMetrics
+          cd "$RUNNER_TEMP"
+          # vcpkg asks for this on arm64 Linux hosts.
+          export VCPKG_FORCE_SYSTEM_BINARIES=1
+          if ! /opt/mdvcpkg/vcpkg install aom libvpx libyuv opus --triplet "$VCPKG_TRIPLET" --overlay-ports="$GITHUB_WORKSPACE/res/vcpkg"; then
+            find /opt/mdvcpkg/buildtrees -name '*.log' -exec sh -c 'echo "== $1"; tail -n 60 "$1"' _ {} \;
+            exit 1
+          fi
+          echo "VCPKG_ROOT=/opt/mdvcpkg" >> "$GITHUB_ENV"
+
+      # Saved right away, so a later failing step does not discard the native
+      # dependency builds.
+      - name: Save vcpkg packages
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /opt/mdvcpkg/installed
+          key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
+
+      - name: Install Flutter
+        run: |
+          git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git /opt/flutter
+          echo "/opt/flutter/bin" >> "$GITHUB_PATH"
+          /opt/flutter/bin/flutter --version
+          /opt/flutter/bin/flutter precache --linux
+          dart_version="$(/opt/flutter/bin/cache/dart-sdk/bin/dart --version 2>&1)"
+          echo "$dart_version"
+          case "$dart_version" in
+            *linux_arm64*) ;;
+            *) echo "Flutter installed a non-ARM64 Dart SDK, so it would not build ARM64"; exit 1 ;;
+          esac
+
+      - name: Build MedusaDesk
+        run: |
+          # Only the cdylib is needed by the Flutter runner.
+          sed -i 's/\["cdylib", "staticlib", "rlib"\]/["cdylib"]/g' Cargo.toml
+          python3 build.py --flutter --unix-file-copy-paste
+          version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          test -f "rustdesk-${version}.deb"
+          mkdir -p out
+          mv "rustdesk-${version}.deb" out/MedusaDesk-linux-arm64.deb
+
+      - name: Require an ARM64 package
+        run: |
+          deb=out/MedusaDesk-linux-arm64.deb
+          dpkg-deb --info "$deb"
+          test "$(dpkg-deb --field "$deb" Architecture)" = arm64
+          dpkg-deb -x "$deb" "$RUNNER_TEMP/deb"
+          for binary in usr/share/rustdesk/rustdesk usr/share/rustdesk/lib/librustdesk.so; do
+            description="$(file -L "$RUNNER_TEMP/deb/$binary")"
+            echo "$description"
+            case "$description" in
+              *"ARM aarch64"*) ;;
+              *) echo "$binary is not ARM64"; exit 1 ;;
+            esac
+          done
+
+      # Installing through apt proves the declared dependencies resolve on a
+      # stock Ubuntu 22.04 ARM64 system, and --version proves the app loads.
+      - name: Install and start the package
+        run: |
+          sudo apt-get install -y "./out/MedusaDesk-linux-arm64.deb"
+          version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
+          output="$(timeout 60 xvfb-run -a rustdesk --version 2>&1)"
+          echo "$output"
+          grep -qF "$version" <<< "$output"
+
+      - name: Upload package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: MedusaDesk-linux-arm64-deb
+          path: out/MedusaDesk-linux-arm64.deb
+
+      - name: Attach package to release
+        if: inputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          cp out/MedusaDesk-linux-arm64.deb "out/MedusaDesk-${TAG}-linux-arm64.deb"
+          gh release upload "$TAG" "out/MedusaDesk-${TAG}-linux-arm64.deb" --repo "${{ github.repository }}" --clobber

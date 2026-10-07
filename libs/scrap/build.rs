@@ -7,7 +7,7 @@ use std::{
 #[path = "../vcpkg_root.rs"]
 mod vcpkg_root;
 
-use vcpkg_root::{has_target_headers, resolve_vcpkg_root};
+use vcpkg_root::{has_target_headers, resolve_vcpkg_root, windows_vcpkg_triplet};
 
 #[cfg(all(target_os = "linux", feature = "linux-pkg-config"))]
 fn link_pkg_config(name: &str) -> Vec<PathBuf> {
@@ -52,7 +52,7 @@ fn link_vcpkg(mut path: PathBuf, name: &str) -> PathBuf {
             format!("{}-{}", target_arch, target_os)
         }
     } else if target_os == "windows" {
-        "x64-windows-static".to_owned()
+        windows_vcpkg_triplet(&target_arch)
     } else {
         format!("{}-{}", target_arch, target_os)
     };
