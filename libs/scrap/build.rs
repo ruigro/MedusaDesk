@@ -288,6 +288,11 @@ fn ffmpeg() {
 fn main() {
     // in this crate, these are also valid configurations
     println!("cargo:rustc-check-cfg=cfg(dxgi,quartz,x11)");
+    println!("cargo:rerun-if-env-changed=CARGO_HOME");
+    println!("cargo:rerun-if-env-changed=HOME");
+    println!("cargo:rerun-if-env-changed=RUSTC");
+    println!("cargo:rerun-if-env-changed=RUSTUP_HOME");
+    println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
 
     // there is problem with cfg(target_os) in build.rs, so use our workaround
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
