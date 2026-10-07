@@ -1,1 +1,0 @@
-PUBLISH_FAILED: no version file found (tauri.conf.json / package.json) — set release.versionFile in .owllm/project.json

@@ -61,6 +61,12 @@
 * Do not make formatting-only changes.
 * Keep naming/style consistent with nearby code.
 
+## Builds and Releases
+
+* Never run builds on GitHub Actions. Actions is disabled for this repo and for `ruigro/hbb_common` on purpose (runner minutes cost money).
+* Do not run `gh workflow run` / `gh workflow enable`, and do not re-enable Actions in the repo settings, unless the user explicitly asks for it in the current request.
+* Build Windows packages and sign them on the user's local PC; build Linux packages on the user's own Linux machines.
+
 ## Localization (`src/lang/*.rs`)
 
 Each file is a `HashMap<key, translation>`. Layout:

@@ -1,16 +1,20 @@
-name: Build MedusaDesk Linux ARM64
+name: Build MedusaDesk Linux
 
-# Builds the Flutter .deb natively on GitHub's ubuntu-22.04-arm runner, so the
-# package needs glibc 2.35+ (Ubuntu 22.04, Debian 12, Raspberry Pi OS bookworm
-# or newer). Like the other Linux packages it is not signed.
+# Builds the Flutter .deb natively on GitHub's Ubuntu 22.04 runners (x86_64 and
+# ARM64), so the packages need glibc 2.35+ (Ubuntu 22.04, Debian 12, Raspberry
+# Pi OS bookworm or newer). Like the other Linux packages they are not signed.
 
 on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Release tag to attach the .deb to (empty = artifact only)
+        description: Version tag built into the app (e.g. v0.1.9); the update check compares it with published releases
         type: string
-        default: ""
+        required: true
+      attach_to_release:
+        description: Attach the .deb packages to the release with this tag (otherwise artifacts only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -20,15 +24,47 @@ env:
   FLUTTER_VERSION: "3.38.5"
   RUST_VERSION: "1.95.0"
   VCPKG_COMMIT_ID: "120deac3062162151622ca4860575a33844ba10b"
-  VCPKG_TRIPLET: arm64-linux
-  DEB_ARCH: arm64
 
 jobs:
   build:
-    runs-on: ubuntu-22.04-arm
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            os: ubuntu-22.04
+            rust_target: x86_64-unknown-linux-gnu
+            vcpkg_triplet: x64-linux
+            deb_arch: amd64
+            dart_arch: linux_x64
+            file_arch: x86-64
+          - arch: arm64
+            os: ubuntu-22.04-arm
+            rust_target: aarch64-unknown-linux-gnu
+            vcpkg_triplet: arm64-linux
+            deb_arch: arm64
+            dart_arch: linux_arm64
+            file_arch: ARM aarch64
+    env:
+      VCPKG_TRIPLET: ${{ matrix.vcpkg_triplet }}
+      DEB_ARCH: ${{ matrix.deb_arch }}
+      DEB: out/MedusaDesk-linux-${{ matrix.arch }}.deb
     steps:
+      - name: Require a release tag
+        env:
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          # An untagged build reports v0.1.0-test, so its update check offers
+          # every published release, including older ones, as an update.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_tag must look like v0.1.9, got '$TAG'"
+            exit 1
+          fi
+
       - name: Checkout source code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -50,11 +86,11 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          targets: aarch64-unknown-linux-gnu
+          targets: ${{ matrix.rust_target }}
 
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
-          prefix-key: linux-arm64
+          prefix-key: linux-${{ matrix.arch }}
           cache-on-failure: true
 
       - name: Restore vcpkg packages
@@ -76,7 +112,9 @@ jobs:
           /opt/mdvcpkg/bootstrap-vcpkg.sh -disableMetrics
           cd "$RUNNER_TEMP"
           # vcpkg asks for this on arm64 Linux hosts.
-          export VCPKG_FORCE_SYSTEM_BINARIES=1
+          if [ "$DEB_ARCH" = arm64 ]; then
+            export VCPKG_FORCE_SYSTEM_BINARIES=1
+          fi
           if ! /opt/mdvcpkg/vcpkg install aom libvpx libyuv opus --triplet "$VCPKG_TRIPLET" --overlay-ports="$GITHUB_WORKSPACE/res/vcpkg"; then
             find /opt/mdvcpkg/buildtrees -name '*.log' -exec sh -c 'echo "== $1"; tail -n 60 "$1"' _ {} \;
             exit 1
@@ -93,6 +131,8 @@ jobs:
           key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
 
       - name: Install Flutter
+        env:
+          DART_ARCH: ${{ matrix.dart_arch }}
         run: |
           git clone --depth 1 --branch "$FLUTTER_VERSION" https://github.com/flutter/flutter.git /opt/flutter
           echo "/opt/flutter/bin" >> "$GITHUB_PATH"
@@ -101,11 +141,14 @@ jobs:
           dart_version="$(/opt/flutter/bin/cache/dart-sdk/bin/dart --version 2>&1)"
           echo "$dart_version"
           case "$dart_version" in
-            *linux_arm64*) ;;
-            *) echo "Flutter installed a non-ARM64 Dart SDK, so it would not build ARM64"; exit 1 ;;
+            *"$DART_ARCH"*) ;;
+            *) echo "Flutter installed a Dart SDK that is not $DART_ARCH, so it would build the wrong architecture"; exit 1 ;;
           esac
 
       - name: Build MedusaDesk
+        env:
+          MEDUSA_RELEASE_TAG: ${{ inputs.release_tag }}
+          MEDUSA_BUILD_ID: ${{ github.sha }}
         run: |
           # Only the cdylib is needed by the Flutter runner.
           sed -i 's/\["cdylib", "staticlib", "rlib"\]/["cdylib"]/g' Cargo.toml
@@ -113,28 +156,31 @@ jobs:
           version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
           test -f "rustdesk-${version}.deb"
           mkdir -p out
-          mv "rustdesk-${version}.deb" out/MedusaDesk-linux-arm64.deb
+          mv "rustdesk-${version}.deb" "$DEB"
 
-      - name: Require an ARM64 package
+      - name: Require a ${{ matrix.arch }} package with the release tag
+        env:
+          FILE_ARCH: ${{ matrix.file_arch }}
+          TAG: ${{ inputs.release_tag }}
         run: |
-          deb=out/MedusaDesk-linux-arm64.deb
-          dpkg-deb --info "$deb"
-          test "$(dpkg-deb --field "$deb" Architecture)" = arm64
-          dpkg-deb -x "$deb" "$RUNNER_TEMP/deb"
+          dpkg-deb --info "$DEB"
+          test "$(dpkg-deb --field "$DEB" Architecture)" = "$DEB_ARCH"
+          dpkg-deb -x "$DEB" "$RUNNER_TEMP/deb"
           for binary in usr/share/rustdesk/rustdesk usr/share/rustdesk/lib/librustdesk.so; do
             description="$(file -L "$RUNNER_TEMP/deb/$binary")"
             echo "$description"
             case "$description" in
-              *"ARM aarch64"*) ;;
-              *) echo "$binary is not ARM64"; exit 1 ;;
+              *"$FILE_ARCH"*) ;;
+              *) echo "$binary is not $FILE_ARCH"; exit 1 ;;
             esac
           done
+          grep -aqF "$TAG" "$RUNNER_TEMP/deb/usr/share/rustdesk/lib/librustdesk.so"
 
       # Installing through apt proves the declared dependencies resolve on a
-      # stock Ubuntu 22.04 ARM64 system, and --version proves the app loads.
+      # stock Ubuntu 22.04 system, and --version proves the app loads.
       - name: Install and start the package
         run: |
-          sudo apt-get install -y "./out/MedusaDesk-linux-arm64.deb"
+          sudo apt-get install -y "./$DEB"
           version="$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)"
           output="$(timeout 60 xvfb-run -a rustdesk --version 2>&1)"
           echo "$output"
@@ -143,14 +189,15 @@ jobs:
       - name: Upload package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: MedusaDesk-linux-arm64-deb
-          path: out/MedusaDesk-linux-arm64.deb
+          name: MedusaDesk-linux-${{ matrix.arch }}-deb
+          path: ${{ env.DEB }}
 
       - name: Attach package to release
-        if: inputs.release_tag != ''
+        if: inputs.attach_to_release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.release_tag }}
         run: |
-          cp out/MedusaDesk-linux-arm64.deb "out/MedusaDesk-${TAG}-linux-arm64.deb"
-          gh release upload "$TAG" "out/MedusaDesk-${TAG}-linux-arm64.deb" --repo "${{ github.repository }}" --clobber
+          asset="out/MedusaDesk-${TAG}-linux-${{ matrix.arch }}.deb"
+          cp "$DEB" "$asset"
+          gh release upload "$TAG" "$asset" --repo "${{ github.repository }}" --clobber

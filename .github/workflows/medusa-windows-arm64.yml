@@ -19,6 +19,10 @@ on:
           - bundle
           - pack
         default: bundle
+      release_tag:
+        description: Version tag built into the app (e.g. v0.1.9, bundle stage); the update check compares it with published releases
+        type: string
+        default: ""
       signed_bundle_release:
         description: Draft release tag holding MedusaDesk-windows-arm64-signed-bundle.zip (pack stage)
         type: string
@@ -43,6 +47,18 @@ jobs:
     if: inputs.stage == 'bundle'
     runs-on: windows-11-arm
     steps:
+      - name: Require a release tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          # An untagged build reports v0.1.0-test, so its update check offers
+          # every published release, including older ones, as an update.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_tag must look like v0.1.9, got '$TAG'"
+            exit 1
+          fi
+
       - name: Checkout source code
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -136,9 +152,15 @@ jobs:
 
       - name: Build MedusaDesk
         shell: pwsh
+        env:
+          MEDUSA_RELEASE_TAG: ${{ inputs.release_tag }}
+          MEDUSA_BUILD_ID: ${{ github.sha }}
         run: |
           python build.py --flutter --skip-portable-pack
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $dll = [IO.File]::ReadAllBytes("flutter/build/windows/arm64/runner/Release/librustdesk.dll")
+          $text = [Text.Encoding]::ASCII.GetString($dll)
+          if (-not $text.Contains($env:MEDUSA_RELEASE_TAG)) { throw "librustdesk.dll does not carry $env:MEDUSA_RELEASE_TAG" }
 
       - name: Require ARM64 binaries
         shell: python

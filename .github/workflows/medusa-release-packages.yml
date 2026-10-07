@@ -4,9 +4,8 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: GitHub release tag to upload packages into
+        description: GitHub release tag to upload packages into (e.g. v0.1.9); also the version built into the app
         required: true
-        default: v0.1.0-test
 
 permissions:
   contents: write
@@ -37,6 +36,18 @@ jobs:
             extra_args: "--screencapturekit"
 
     steps:
+      - name: Require a release tag
+        shell: bash
+        env:
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          # An untagged build reports v0.1.0-test, so its update check offers
+          # every published release, including older ones, as an update.
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release_tag must look like v0.1.9, got '$TAG'"
+            exit 1
+          fi
+
       - name: Export GitHub Actions cache environment variables
         uses: actions/github-script@v7
         with:
